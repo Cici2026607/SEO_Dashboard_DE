@@ -117,7 +117,7 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # UI目标输入：硬编码默认值为 9000 和 15000 (同西语站逻辑)
+        # UI目标输入：硬编码默认值已修改为 9000 和 23000！
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
@@ -126,7 +126,7 @@ try:
         with col_target1:
             target_sales = st.number_input("🎯 DE Sales Target ($)", value=9000.0, step=500.0)
         with col_target2:
-            target_traffic = st.number_input("⚡ DE Traffic Target", value=15000.0, step=1000.0)
+            target_traffic = st.number_input("⚡ DE Traffic Target", value=23000.0, step=1000.0)
                 
         # ==========================================
         # 2. 日期匹配与强力清洗查表函数
