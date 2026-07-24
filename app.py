@@ -73,7 +73,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. Data Loader & Smart Matching
+# 1. Data Loader & Smart Matching (极简模式)
 # ==========================================
 @st.cache_data(ttl=300)
 def load_and_clean_data():
@@ -121,7 +121,7 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # UI目标输入
+        # UI目标输入：硬编码默认值为 9000 和 23000
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
@@ -143,8 +143,10 @@ try:
                     date_mapping[col] = dt
                 except: pass
         
+        # MTD 截取到 data_date (T-2)
         mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
 
+        # LM 自动对齐截取到对应的 T-2 天数
         lm_year = current_year if current_month > 1 else current_year - 1
         lm_month = current_month - 1 if current_month > 1 else 12
         lm_day = min(data_date.day, calendar.monthrange(lm_year, lm_month)[1])
@@ -152,16 +154,19 @@ try:
         lm_end = date(lm_year, lm_month, lm_day)
         lm_cols = [col for col, dt in date_mapping.items() if lm_start <= dt <= lm_end]
 
+        # LY 自动对齐截取到对应的 T-2 天数
         ly_year = current_year - 1
         ly_day = min(data_date.day, calendar.monthrange(ly_year, current_month)[1])
         ly_start = date(ly_year, current_month, 1)
         ly_end = date(ly_year, current_month, ly_day)
         ly_cols = [col for col, dt in date_mapping.items() if ly_start <= dt <= ly_end]
 
+        # UI 显示字符串更新为 T-2 日期
         curr_str = f"({current_month:02d}/01 - {current_month:02d}/{data_date.day:02d})"
         lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
         ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
 
+        # 核心读取数据函数 (已加入防 nan 机制，空白统统算作 0)
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
@@ -177,6 +182,7 @@ try:
                 if valid_cols:
                     vals = data[valid_cols].iloc[0].astype(str).str.replace(',', '', regex=False)
                     if is_currency: vals = vals.str.replace('$', '', regex=False)
+                    # errors='coerce' 会把空白或无法识别的字符变为 NaN, fillna(0) 会把 NaN 变成 0
                     return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0.0
             
@@ -198,6 +204,7 @@ try:
                         return pd.to_numeric(val, errors='coerce')
             return 0
 
+        # ⭐ 德语站唯一销售额基准：无脑锁定 "ga4seo销售额" (对应 Google Sheet A27行)
         mtd_sales = get_sum(['ga4seo销售额', 'ga4销售额'], mtd_cols, True)
         lm_sales = get_sum(['ga4seo销售额', 'ga4销售额'], lm_cols, True)
         ly_sales = get_sum(['ga4seo销售额', 'ga4销售额'], ly_cols, True)
@@ -257,7 +264,7 @@ try:
             </div>
             """, unsafe_allow_html=True)
 
-        # 3.2 MTD 同环比计算
+        # 3.2 MTD 同环比计算 (基于 GA4)
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-chart-simple"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">MTD Monitoring</h3></div>', unsafe_allow_html=True)
         def get_trend_ui(pct): return ("#FF6475" if pct < 0 else "#22C55E", "#FFF0F2" if pct < 0 else "#F0FDF4", "↓" if pct < 0 else "↑")
 
@@ -312,21 +319,32 @@ try:
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
-        # 4. 全局漏斗分析区间 (彻底采用单日分拆模式)
+        # 4. 区间维度控制
         # ==========================================
         valid_dates = list(date_mapping.values())
         min_date = min(valid_dates) if valid_dates else date.today()
         max_date = max(valid_dates) if valid_dates else date.today()
 
-        st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-regular fa-calendar"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Interval Analysis</h3></div>', unsafe_allow_html=True)
-        st.caption("Modules below (Funnel & Table) are bounded by this selection.")
-        
-        # 废弃 range，改用 Start 和 End 双选框以避免 Streamlit 自带的 dropdown 机制
-        col_g1, col_g2, col_g3 = st.columns([1, 1, 2])
-        with col_g1: start_d1 = st.date_input("🗓️ 开始日期 (Start)", min_date, key="g_start")
-        with col_g2: end_d1 = st.date_input("🗓️ 结束日期 (End)", max_date, key="g_end")
+        header_col1, header_col2, header_col3 = st.columns([1.5, 1, 1])
+        with header_col1:
+            st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-regular fa-calendar"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Interval Analysis</h3></div>', unsafe_allow_html=True)
+            st.caption("Modules below are strictly bounded by your date selection.")
+        with header_col2:
+            primary_dates = st.date_input("🗓️ Primary Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+        with header_col3:
+            enable_compare = st.checkbox("🔄 Enable Trend Comparison")
+            if enable_compare:
+                compare_dates = st.date_input("🗓️ Compare Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+            else: compare_dates = []
 
+        if len(primary_dates) == 2: start_d1, end_d1 = primary_dates
+        else: start_d1 = end_d1 = primary_dates[0]
         filtered_cols_1 = [col for col, dt in date_mapping.items() if start_d1 <= dt <= end_d1]
+
+        if enable_compare and len(compare_dates) == 2:
+            start_d2, end_d2 = compare_dates
+            filtered_cols_2 = [col for col, dt in date_mapping.items() if start_d2 <= dt <= end_d2]
+        else: filtered_cols_2 = []
 
         # ==========================================
         # 5. 区间漏斗与资产
@@ -371,7 +389,7 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # 销售拆解 
+        # 销售拆解 (深色高亮显示 GA4 SEO 销售额)
         st.markdown(f"""
         <div class="soft-card">
             <h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
@@ -431,13 +449,14 @@ try:
             """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 (彻底拆分为独立的单选日期，完美解决系统Dropdown干扰)
+        # 6. 图表与明细
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
             r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
             return f'rgba({r}, {g}, {b}, {alpha})'
 
+        # 图表获取趋势线数据防 nan 机制
         def get_trend_series(possible_names, cols, is_curr=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
@@ -462,87 +481,38 @@ try:
         traffic_colors = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000'}
         
         font_style = dict(family="Poppins, sans-serif", color="#8E8CA7")
+        dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
+        dates2 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_2] if filtered_cols_2 else []
         
-        # ---------------- Sales Chart ----------------
+        # Sales Chart
         st.markdown('<div class="soft-card" style="padding-bottom:10px;"><div class="flex-center" style="margin-bottom:20px; justify-content:space-between;"><div class="flex-center"><div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-chart-area"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span></div></div>', unsafe_allow_html=True)
-        
-        col_s_m, col_s_d = st.columns([1, 2])
-        with col_s_m:
-            selected_sales_metrics = st.multiselect("Select Sales Metrics", sales_metrics_options, default=['GA4 SEO销售额'], label_visibility="collapsed", key="sales_sel")
-            st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
-            enable_s_cmp = st.checkbox("☑️ 添加对比时间段 (Enable Compare)", key="s_cmp_chk")
-            
-        with col_s_d:
-            # 第一排：主时间 (拆分为两格框，完全复刻截图)
-            sd_col1, sd_col2 = st.columns(2)
-            with sd_col1: s_start = st.date_input("开始日期", min_date, key="s_start_1")
-            with sd_col2: s_end = st.date_input("结束日期", max_date, key="s_end_1")
-            
-            # 第二排：对比时间
-            if enable_s_cmp:
-                st.markdown("<div style='margin: 4px 0; font-size: 14px; font-weight: bold; color: #8E8CA7;'>与 (VS)</div>", unsafe_allow_html=True)
-                sc_col1, sc_col2 = st.columns(2)
-                with sc_col1: sc_start = st.date_input("开始日期", min_date - timedelta(days=30), key="s_start_2")
-                with sc_col2: sc_end = st.date_input("结束日期", max_date - timedelta(days=30), key="s_end_2")
-            else:
-                sc_start = sc_end = None
-                
-        sales_cols = [col for col, dt in date_mapping.items() if s_start <= dt <= s_end]
-        sales_dates_str = [date_mapping[d].strftime('%Y-%m-%d') for d in sales_cols]
-        
-        sales_comp_cols = []
-        if enable_s_cmp and sc_start and sc_end:
-            sales_comp_cols = [col for col, dt in date_mapping.items() if sc_start <= dt <= sc_end]
+        selected_sales_metrics = st.multiselect("Select Sales Metrics", sales_metrics_options, default=['GA4 SEO销售额'], label_visibility="collapsed", key="sales_sel")
         
         fig_sales = go.Figure()
         if selected_sales_metrics:
             for metric in selected_sales_metrics:
                 color = sales_colors[metric]
+                # 图表中也将可能的名称全传进去
                 search_names = ['ga4seo销售额', 'ga4销售额'] if metric == 'GA4 SEO销售额' else ['supersetseo销售额', 'seo销售额', 'superset']
                 
-                s_trend1 = get_trend_series(search_names, sales_cols, True)
-                s_trend2 = get_trend_series(search_names, sales_comp_cols, True) if sales_comp_cols else []
+                s_trend1 = get_trend_series(search_names, filtered_cols_1, True)
+                s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
                 
                 if not s_trend2:
-                    fig_sales.add_trace(go.Scatter(x=sales_dates_str, y=s_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else:
                     max_len = max(len(s_trend1), len(s_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
-                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines', name=f'{metric} (Primary)', line=dict(color=color, width=3, shape='spline')))
-                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines', name=f'{metric} (Compare)', line=dict(color=color, width=3, dash='dash', shape='spline')))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline')))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline')))
             
         fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"))
         st.plotly_chart(fig_sales, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # ---------------- Traffic Chart ----------------
+        # Traffic Chart
         st.markdown('<div class="soft-card" style="padding-bottom:10px;"><div class="flex-center" style="margin-bottom:20px; justify-content:space-between;"><div class="flex-center"><div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span></div></div>', unsafe_allow_html=True)
-        
-        col_t_m, col_t_d = st.columns([1, 2])
-        with col_t_m:
-            selected_traffic_metrics = st.multiselect("Select Traffic Metrics", traffic_metrics_options, default=['SEO流量'], label_visibility="collapsed", key="traf_sel")
-            st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
-            enable_t_cmp = st.checkbox("☑️ 添加对比时间段 (Enable Compare)", key="t_cmp_chk")
-            
-        with col_t_d:
-            td_col1, td_col2 = st.columns(2)
-            with td_col1: t_start = st.date_input("开始日期", min_date, key="t_start_1")
-            with td_col2: t_end = st.date_input("结束日期", max_date, key="t_end_1")
-            
-            if enable_t_cmp:
-                st.markdown("<div style='margin: 4px 0; font-size: 14px; font-weight: bold; color: #8E8CA7;'>与 (VS)</div>", unsafe_allow_html=True)
-                tc_col1, tc_col2 = st.columns(2)
-                with tc_col1: tc_start = st.date_input("开始日期", min_date - timedelta(days=30), key="t_start_2")
-                with tc_col2: tc_end = st.date_input("结束日期", max_date - timedelta(days=30), key="t_end_2")
-            else:
-                tc_start = tc_end = None
-                
-        traffic_cols = [col for col, dt in date_mapping.items() if t_start <= dt <= t_end]
-        traffic_dates_str = [date_mapping[d].strftime('%Y-%m-%d') for d in traffic_cols]
-        
-        traffic_comp_cols = []
-        if enable_t_cmp and tc_start and tc_end:
-            traffic_comp_cols = [col for col, dt in date_mapping.items() if tc_start <= dt <= tc_end]
+        selected_traffic_metrics = st.multiselect("Select Traffic Metrics", traffic_metrics_options, default=['SEO流量'], label_visibility="collapsed", key="traf_sel")
         
         fig_traffic = go.Figure()
         if selected_traffic_metrics:
@@ -554,25 +524,24 @@ try:
                 if metric == '网站总流量': search_names = ['网站总流量', '总流量']
                 if metric == 'SEO流量': search_names = ['seo流量', '流量']
 
-                t_trend1 = get_trend_series(search_names, traffic_cols)
-                t_trend2 = get_trend_series(search_names, traffic_comp_cols) if traffic_comp_cols else []
+                t_trend1 = get_trend_series(search_names, filtered_cols_1)
+                t_trend2 = get_trend_series(search_names, filtered_cols_2) if filtered_cols_2 else []
                 
                 if not t_trend2: 
-                    fig_traffic.add_trace(go.Scatter(x=traffic_dates_str, y=t_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else: 
                     max_len = max(len(t_trend1), len(t_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
-                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines', name=f'{metric} (Primary)', line=dict(color=color, width=3, shape='spline')))
-                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines', name=f'{metric} (Compare)', line=dict(color=color, width=3, dash='dash', shape='spline')))
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline')))
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline')))
 
         fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
         st.plotly_chart(fig_traffic, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Raw Table (仅受全局漏斗日期控制)
+        # Raw Table
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
         
-        dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
         df_display = df_de[['Metric'] + [c for c in filtered_cols_1 if c in df_de.columns]].copy()
         df_display.columns = ['Metric'] + dates1
         df_display = df_display.set_index('Metric')
