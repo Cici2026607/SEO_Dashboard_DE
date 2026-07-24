@@ -77,6 +77,7 @@ st.markdown("""
 # ==========================================
 @st.cache_data(ttl=300)
 def load_and_clean_data():
+    # 注意：为了能整表下载 Excel 读取别的 Sheet，我去掉了 xlsx 链接里的 single=true 和 gid
     base_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4KTuYQtC6xsRIwgWLDK9aJUhqmKDmUg4XmMxbsKadyj4QSRM9GNvDjyYz7z8vzKj8nohA7a8ukiLz/pub?"
     ts = int(datetime.now().timestamp())
     csv_url = base_url + f"gid=0&single=true&output=csv&_t={ts}"
@@ -105,18 +106,26 @@ def load_and_clean_data():
     df_de = df_de[cols_to_keep]
 
     # 2. 抓取子表格中的流量目标 (Excel - B3)
+    traffic_target = 15000.0  # 默认兜底值
+    err_msg = ""
     try:
         df_targets = pd.read_excel(xlsx_url, sheet_name="SEO月度流量目标", header=None)
-        traffic_target = pd.to_numeric(df_targets.iloc[2, 1], errors='coerce')
-        if pd.isna(traffic_target): traffic_target = 15000.0
+        # B3 在 Pandas 里对应的是 第3行(index 2)，第2列(index 1)
+        val = pd.to_numeric(df_targets.iloc[2, 1], errors='coerce')
+        if not pd.isna(val): 
+            traffic_target = float(val)
     except Exception as e:
-        traffic_target = 15000.0 # 若未安装 openpyxl 或读取失败，降级为默认值
+        err_msg = str(e)
 
-    return df_de, float(traffic_target)
+    return df_de, traffic_target, err_msg
 
 try:
     with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
-        df_de, excel_traffic_target = load_and_clean_data()
+        df_de, excel_traffic_target, excel_err = load_and_clean_data()
+
+        # 🚨 如果读取子表失败，给出提示以便排查
+        if excel_err:
+            st.warning(f"无法读取『SEO月度流量目标』子表，已使用默认值。报错信息: {excel_err}")
 
         today = datetime.now().date()
         current_year, current_month = today.year, today.month
@@ -202,11 +211,12 @@ try:
                     return pd.to_numeric(val, errors='coerce')
             return 0
 
-        # ⭐ Hybrid 查表逻辑 (5月22日为界限，前用 Superset，后用 GA4)
+        # ⭐ Hybrid 查表逻辑修复版：去除了匹配词里的所有空格
         def get_hybrid_sales(cols):
             threshold = date(2026, 5, 22)
-            ga4_data = df_de[df_de['Metric_Norm'].str.contains('ga4 seo销售额|ga4销售额', na=False)]
-            super_data = df_de[df_de['Metric_Norm'].str.contains('superset seo销售额|seo销售额', na=False)]
+            # 正确匹配去空格后的 Metric_Norm
+            ga4_data = df_de[df_de['Metric_Norm'].str.contains('ga4seo销售额|ga4销售额|ga4', na=False)]
+            super_data = df_de[df_de['Metric_Norm'].str.contains('supersetseo销售额|seo销售额|superset', na=False)]
             
             total = 0.0
             for col in cols:
@@ -483,8 +493,8 @@ try:
             
         def get_hybrid_trend(cols):
             threshold = date(2026, 5, 22)
-            ga4_data = df_de[df_de['Metric_Norm'].str.contains('ga4 seo销售额|ga4销售额', na=False)]
-            super_data = df_de[df_de['Metric_Norm'].str.contains('superset seo销售额|seo销售额', na=False)]
+            ga4_data = df_de[df_de['Metric_Norm'].str.contains('ga4seo销售额|ga4销售额|ga4', na=False)]
+            super_data = df_de[df_de['Metric_Norm'].str.contains('supersetseo销售额|seo销售额|superset', na=False)]
             
             trend = []
             for col in cols:
