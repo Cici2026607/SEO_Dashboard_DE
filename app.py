@@ -73,16 +73,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. Data Loader
+# 1. Data Loader & Smart Matching
 # ==========================================
-sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4KTuYQtC6xsRIwgWLDK9aJUhqmKDmUg4XmMxbsKadyj4QSRM9GNvDjyYz7z8vzKj8nohA7a8ukiLz/pub?gid=0&single=true&output=csv"
-
-@st.cache_data(ttl=600)
-def load_and_clean_data(url):
-    bust_url = f"{url}&_t={int(datetime.now().timestamp())}"
-    df_raw = pd.read_csv(bust_url, header=None)
+@st.cache_data(ttl=300)
+def load_and_clean_data():
+    base_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4KTuYQtC6xsRIwgWLDK9aJUhqmKDmUg4XmMxbsKadyj4QSRM9GNvDjyYz7z8vzKj8nohA7a8ukiLz/pub?"
+    ts = int(datetime.now().timestamp())
+    csv_url = base_url + f"gid=0&single=true&output=csv&_t={ts}"
+    xlsx_url = base_url + f"output=xlsx&_t={ts}"
     
-    # German Slice: Header Row 22 (idx 21), Data Rows 24-40 (idx 23:40)
+    # 1. 抓取主数据 (CSV)
+    df_raw = pd.read_csv(csv_url, header=None)
     raw_columns = list(df_raw.iloc[21])
     df_de = df_raw.iloc[23:40].copy()
     
@@ -97,27 +98,30 @@ def load_and_clean_data(url):
                 
     df_de.columns = clean_columns
     df_de.reset_index(drop=True, inplace=True)
-    
     df_de['Metric'] = df_de['Metric'].astype(str).str.strip()
     df_de['Metric_Norm'] = df_de['Metric'].str.replace(' ', '', regex=False).str.lower()
-    
-    df_de = df_de[df_de['Metric'].notna()]
-    df_de = df_de[df_de['Metric'] != '']
-    df_de = df_de[df_de['Metric'].str.lower() != 'nan']
-    
+    df_de = df_de[df_de['Metric'].notna() & (df_de['Metric'] != '') & (df_de['Metric'].str.lower() != 'nan')]
     cols_to_keep = [c for c in df_de.columns if "空列_" not in c]
-    return df_de[cols_to_keep]
+    df_de = df_de[cols_to_keep]
+
+    # 2. 抓取子表格中的流量目标 (Excel - B3)
+    try:
+        df_targets = pd.read_excel(xlsx_url, sheet_name="SEO月度流量目标", header=None)
+        traffic_target = pd.to_numeric(df_targets.iloc[2, 1], errors='coerce')
+        if pd.isna(traffic_target): traffic_target = 15000.0
+    except Exception as e:
+        traffic_target = 15000.0 # 若未安装 openpyxl 或读取失败，降级为默认值
+
+    return df_de, float(traffic_target)
 
 try:
-    with st.spinner('🚀 Loading Callie DE Dashboard...'):
-        df_de = load_and_clean_data(sheet_url)
+    with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
+        df_de, excel_traffic_target = load_and_clean_data()
 
         today = datetime.now().date()
         current_year, current_month = today.year, today.month
 
-        # ==========================================
-        # 2. Welcome Banner
-        # ==========================================
+        # Welcome Banner
         st.markdown(f"""
         <div class="welcome-banner">
             <h1>Hallo, Callie DE Team! 🇩🇪</h1>
@@ -125,14 +129,18 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        col_btn, _ = st.columns([1, 5])
+        col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
                 load_and_clean_data.clear()
                 st.rerun()
+        with col_target1:
+            target_sales = st.number_input("🎯 DE Sales Target ($)", value=9000.0, step=500.0)
+        with col_target2:
+            target_traffic = st.number_input("⚡ DE Traffic Target (From Sheet)", value=excel_traffic_target, step=1000.0)
                 
         # ==========================================
-        # 3. MTD Metrics
+        # 2. 日期匹配与 Hybrid 查表函数
         # ==========================================
         date_mapping = {}
         for col in df_de.columns:
@@ -144,28 +152,49 @@ try:
         
         mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= today]
 
-        curr_str = f"({current_month:02d}/01 - {current_month:02d}/{today.day:02d})"
         lm_year = current_year if current_month > 1 else current_year - 1
         lm_month = current_month - 1 if current_month > 1 else 12
         lm_day = min(today.day, calendar.monthrange(lm_year, lm_month)[1])
-        lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
-        
+        lm_start = date(lm_year, lm_month, 1)
+        lm_end = date(lm_year, lm_month, lm_day)
+        lm_cols = [col for col, dt in date_mapping.items() if lm_start <= dt <= lm_end]
+
         ly_year = current_year - 1
         ly_day = min(today.day, calendar.monthrange(ly_year, current_month)[1])
+        ly_start = date(ly_year, current_month, 1)
+        ly_end = date(ly_year, current_month, ly_day)
+        ly_cols = [col for col, dt in date_mapping.items() if ly_start <= dt <= ly_end]
+
+        curr_str = f"({current_month:02d}/01 - {current_month:02d}/{today.day:02d})"
+        lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
         ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
 
-        def get_sum(metric_name, cols, is_currency=False):
-            target = metric_name.replace(' ', '').lower()
-            data = df_de[df_de['Metric_Norm'] == target]
+        # 普通查表逻辑
+        def get_sum(possible_names, cols, is_currency=False):
+            if isinstance(possible_names, str): possible_names = [possible_names]
+            data = pd.DataFrame()
+            for p in possible_names:
+                target = p.replace(' ', '').lower()
+                matched = df_de[df_de['Metric_Norm'].str.contains(target, na=False)]
+                if not matched.empty:
+                    data = matched
+                    break
+                    
             if not data.empty and cols:
                 vals = data[cols].iloc[0].astype(str).str.replace(',', '', regex=False)
                 if is_currency: vals = vals.str.replace('$', '', regex=False)
                 return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0.0
             
-        def get_latest(metric_name, cols):
-            target = metric_name.replace(' ', '').lower()
-            data = df_de[df_de['Metric_Norm'] == target]
+        def get_latest(possible_names, cols):
+            if isinstance(possible_names, str): possible_names = [possible_names]
+            data = pd.DataFrame()
+            for p in possible_names:
+                target = p.replace(' ', '').lower()
+                matched = df_de[df_de['Metric_Norm'].str.contains(target, na=False)]
+                if not matched.empty:
+                    data = matched
+                    break
             if not data.empty and cols:
                 vals = data[cols].iloc[0].replace(['None', 'nan', '', '#DIV/0!'], pd.NA).dropna()
                 if not vals.empty:
@@ -173,24 +202,48 @@ try:
                     return pd.to_numeric(val, errors='coerce')
             return 0
 
-        mtd_sales = get_sum('Superset SEO销售额', mtd_cols, True)
-        mtd_traffic = get_sum('SEO流量', mtd_cols)
+        # ⭐ Hybrid 查表逻辑 (5月22日为界限，前用 Superset，后用 GA4)
+        def get_hybrid_sales(cols):
+            threshold = date(2026, 5, 22)
+            ga4_data = df_de[df_de['Metric_Norm'].str.contains('ga4 seo销售额|ga4销售额', na=False)]
+            super_data = df_de[df_de['Metric_Norm'].str.contains('superset seo销售额|seo销售额', na=False)]
+            
+            total = 0.0
+            for col in cols:
+                dt = date_mapping.get(col)
+                if not dt: continue
+                
+                row = ga4_data if dt >= threshold else super_data
+                if not row.empty and col in row.columns:
+                    val = str(row[col].iloc[0]).replace(',', '').replace('$', '')
+                    total += pd.to_numeric(val, errors='coerce') if pd.notna(val) else 0.0
+            return total
 
-        target_sales, target_traffic = 3000, 6100 
-        
+        # 使用 Hybrid 逻辑获取销售额
+        mtd_sales = get_hybrid_sales(mtd_cols)
+        lm_sales = get_hybrid_sales(lm_cols)
+        ly_sales = get_hybrid_sales(ly_cols)
+
+        # 流量仍使用常规方法
+        mtd_traffic = get_sum(['seo流量', '流量'], mtd_cols)
+        lm_traffic = get_sum(['seo流量', '流量'], lm_cols)
+        ly_traffic = get_sum(['seo流量', '流量'], ly_cols)
+
         prog_sales = min(mtd_sales / target_sales, 1.0) if target_sales > 0 else 0
         prog_traffic = min(mtd_traffic / target_traffic, 1.0) if target_traffic > 0 else 0
         gap_sales = max(0, target_sales - mtd_sales)
         gap_traffic = max(0, target_traffic - mtd_traffic)
 
-        # Target Achievement
+        # 3.1 Target Achievement
         st.markdown('<div class="flex-center" style="margin:20px 0;"><div class="icon-square bg-orange"><i class="fa-solid fa-bullseye"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Target Achievement (Monat)</h3></div>', unsafe_allow_html=True)
+        st.markdown('<p class="text-muted" style="margin-top:-10px; margin-bottom: 20px;"><i>💡 Note: Due to DE domain resolution issues, Actual Sales uses <b>Superset</b> before May 22, 2026, and <b>GA4</b> from May 22 onwards.</i></p>', unsafe_allow_html=True)
+        
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
             <div class="soft-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-sack-dollar" style="color:#FF6475; margin-right:8px;"></i> Sales Progress</div>
+                    <div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-sack-dollar" style="color:#FF6475; margin-right:8px;"></i> Actual Sales Progress (Hybrid)</div>
                     <div style="color: #FF6475; font-size: 14px; font-weight: 700;">Gap: $ {gap_sales:,.2f}</div>
                 </div>
                 <div style="margin-bottom: 28px; display: flex; align-items: baseline;">
@@ -228,40 +281,36 @@ try:
             </div>
             """, unsafe_allow_html=True)
 
-        # MTD YoY & MoM
+        # 3.2 MTD 真实同环比计算
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-chart-simple"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">MTD Monitoring</h3></div>', unsafe_allow_html=True)
         def get_trend_ui(pct): return ("#FF6475" if pct < 0 else "#22C55E", "#FFF0F2" if pct < 0 else "#F0FDF4", "↓" if pct < 0 else "↑")
 
-        mock_lm_sales = mtd_sales * 1.03 if mtd_sales > 0 else 0
-        mock_ly_sales = mtd_sales * 1.15 if mtd_sales > 0 else 0
-        mom_sales_pct = ((mtd_sales - mock_lm_sales) / mock_lm_sales) * 100 if mock_lm_sales else 0
-        yoy_sales_pct = ((mtd_sales - mock_ly_sales) / mock_ly_sales) * 100 if mock_ly_sales else 0
+        mom_sales_pct = ((mtd_sales - lm_sales) / lm_sales) * 100 if lm_sales > 0 else 0.0
+        yoy_sales_pct = ((mtd_sales - ly_sales) / ly_sales) * 100 if ly_sales > 0 else 0.0
         c1_m, bg1_m, arr1_m = get_trend_ui(mom_sales_pct)
         c1_y, bg1_y, arr1_y = get_trend_ui(yoy_sales_pct)
 
         st.markdown(f"""
         <div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
             <div style="flex: 1;">
-                <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Sales MTD <span class="compare-date-str">{curr_str}</span></p>
+                <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Actual Sales MTD (Hybrid) <span class="compare-date-str">{curr_str}</span></p>
                 <h2 class="text-main" style="margin: 0; font-size: 32px;">$ {mtd_sales:,.2f}</h2>
             </div>
             <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
                 <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {mock_lm_sales:,.2f}</h2>
+                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {lm_sales:,.2f}</h2>
                 <span style="color: {c1_m}; font-weight: 600; background: {bg1_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_m} {abs(mom_sales_pct):.1f}% MoM</span>
             </div>
             <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
                 <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {mock_ly_sales:,.2f}</h2>
+                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {ly_sales:,.2f}</h2>
                 <span style="color: {c1_y}; font-weight: 600; background: {bg1_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_y} {abs(yoy_sales_pct):.1f}% YoY</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        mock_lm_traffic = mtd_traffic * 0.95 if mtd_traffic > 0 else 0
-        mock_ly_traffic = mtd_traffic * 1.35 if mtd_traffic > 0 else 0
-        mom_traf_pct = ((mtd_traffic - mock_lm_traffic) / mock_lm_traffic) * 100 if mock_lm_traffic else 0
-        yoy_traf_pct = ((mtd_traffic - mock_ly_traffic) / mock_ly_traffic) * 100 if mock_ly_traffic else 0
+        mom_traf_pct = ((mtd_traffic - lm_traffic) / lm_traffic) * 100 if lm_traffic > 0 else 0.0
+        yoy_traf_pct = ((mtd_traffic - ly_traffic) / ly_traffic) * 100 if ly_traffic > 0 else 0.0
         c2_m, bg2_m, arr2_m = get_trend_ui(mom_traf_pct)
         c2_y, bg2_y, arr2_y = get_trend_ui(yoy_traf_pct)
 
@@ -273,12 +322,12 @@ try:
             </div>
             <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
                 <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{mock_lm_traffic:,.0f}</h2>
+                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_traffic:,.0f}</h2>
                 <span style="color: {c2_m}; font-weight: 600; background: {bg2_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_m} {abs(mom_traf_pct):.1f}% MoM</span>
             </div>
             <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
                 <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{mock_ly_traffic:,.0f}</h2>
+                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_traffic:,.0f}</h2>
                 <span style="color: {c2_y}; font-weight: 600; background: {bg2_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_y} {abs(yoy_traf_pct):.1f}% YoY</span>
             </div>
         </div>
@@ -287,7 +336,7 @@ try:
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
-        # 4. Interval Analysis
+        # 4. 区间维度控制
         # ==========================================
         valid_dates = list(date_mapping.values())
         min_date = min(valid_dates) if valid_dates else date.today()
@@ -315,30 +364,29 @@ try:
         else: filtered_cols_2 = []
 
         # ==========================================
-        # 5. Calculation & Funnel
+        # 5. 区间漏斗与资产
         # ==========================================
-        int_traffic = get_sum('SEO流量', filtered_cols_1)
-        int_blog = get_sum('SEO Blog 流量', filtered_cols_1)
-        int_insite = get_sum('SEO 站内流量', filtered_cols_1)
-        int_site_total = get_sum('网站总流量', filtered_cols_1)
+        int_traffic = get_sum(['seo流量', '流量'], filtered_cols_1)
+        int_blog = get_sum(['seo blog 流量', 'blog流量'], filtered_cols_1)
+        int_insite = get_sum(['seo 站内流量', '站内流量'], filtered_cols_1)
+        int_site_total = get_sum(['网站总流量', '总流量'], filtered_cols_1)
         
         int_bounce_rate = 0.0
-        bounce_data = df_de[df_de['Metric_Norm'] == '跳出率']
+        bounce_data = df_de[df_de['Metric_Norm'].str.contains('跳出率', na=False)]
         if not bounce_data.empty and filtered_cols_1:
             br_vals = bounce_data[filtered_cols_1].iloc[0].astype(str).str.replace('%', '', regex=False)
             br_series = pd.to_numeric(br_vals, errors='coerce').dropna()
             if not br_series.empty: int_bounce_rate = br_series.mean()
 
-        int_super_sales = get_sum('Superset SEO销售额', filtered_cols_1, True)
-        int_ga4_sales = get_sum('GA4 SEO销售额', filtered_cols_1, True)
+        int_hybrid_sales = get_hybrid_sales(filtered_cols_1)
 
-        ai_sales = get_sum('AI Assistant 销售额', filtered_cols_1, True)
-        ai_traffic = get_sum('AI Assistant 流量', filtered_cols_1)
+        ai_sales = get_sum(['ai assistant 销售额', 'ai销售额'], filtered_cols_1, True)
+        ai_traffic = get_sum(['ai assistant 流量', 'ai流量'], filtered_cols_1)
         google_index = get_latest('收录', filtered_cols_1)
         google_backlinks = get_latest('外链', filtered_cols_1)
         google_domain = get_latest('外链域名广度', filtered_cols_1)
 
-        # Funnel
+        # 漏斗
         st.markdown(f"""
         <div class="soft-card">
             <h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
@@ -351,30 +399,26 @@ try:
                 <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p><p class="funnel-value">{int_site_total:,.0f}</p></div>
                 <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p><p class="funnel-value">{int_bounce_rate:.2f}%</p></div>
             </div>
-            <p class="text-muted" style="font-size: 12px; margin: 0;">✦ Traffic anomalies filtered. Cross-reference bounce rate for quality assessment.</p>
+            <p class="text-muted" style="font-size: 12px; margin: 0;">✦ Real-time data mapped for Callie DE.</p>
         </div>
         """, unsafe_allow_html=True)
         
-        # Sales Breakdown Card
+        # 销售拆解 (高亮显示 Hybrid SEO 销售额)
         st.markdown(f"""
         <div class="soft-card">
             <h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
                 <div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-sack-dollar"></i></div> Sales Breakdown (Selected Interval)
             </h4>
             <div style="display: flex; gap: 20px;">
-                <div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-                    <p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p>
-                    <p class="box-value-dark" style="font-size: 36px;">$ {int_super_sales:,.2f}</p>
-                </div>
-                <div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-                    <p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales</p>
-                    <p class="box-value-dark" style="font-size: 36px;">$ {int_ga4_sales:,.2f}</p>
+                <div class="inner-box box-deep" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                    <p class="box-label" style="justify-content: center; margin-bottom: 8px; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Actual Sales (Hybrid)</p>
+                    <p class="box-value-white" style="font-size: 36px;">$ {int_hybrid_sales:,.2f}</p>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # Asset Cards
+        # 资产
         col_ai, col_google = st.columns(2)
         with col_ai:
             st.markdown(f"""
@@ -390,7 +434,6 @@ try:
                         <p class="box-value-dark">{ai_traffic:,.0f}</p>
                     </div>
                 </div>
-                <p class="card-caption">Commercial value driven by AI Models.</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -412,29 +455,51 @@ try:
                         <p class="box-value-dark">{google_domain:,.0f}</p>
                     </div>
                 </div>
-                <p class="card-caption">Long-term domain authority and credibility accumulation.</p>
             </div>
             """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. Trend Charts
+        # 6. 图表与明细
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
             r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
             return f'rgba({r}, {g}, {b}, {alpha})'
 
-        def get_trend_series(metric, cols, is_curr=False):
-            target = metric.replace(' ', '').lower()
-            data = df_de[df_de['Metric_Norm'] == target]
+        def get_trend_series(possible_names, cols, is_curr=False):
+            if isinstance(possible_names, str): possible_names = [possible_names]
+            data = pd.DataFrame()
+            for p in possible_names:
+                target = p.replace(' ', '').lower()
+                matched = df_de[df_de['Metric_Norm'].str.contains(target, na=False)]
+                if not matched.empty:
+                    data = matched
+                    break
             if not data.empty and cols:
                 vals = data[cols].iloc[0].astype(str).str.replace(',', '', regex=False)
                 if is_curr: vals = vals.str.replace('$', '', regex=False)
                 return pd.to_numeric(vals, errors='coerce').fillna(0).tolist()
             return []
+            
+        def get_hybrid_trend(cols):
+            threshold = date(2026, 5, 22)
+            ga4_data = df_de[df_de['Metric_Norm'].str.contains('ga4 seo销售额|ga4销售额', na=False)]
+            super_data = df_de[df_de['Metric_Norm'].str.contains('superset seo销售额|seo销售额', na=False)]
+            
+            trend = []
+            for col in cols:
+                dt = date_mapping.get(col)
+                val_num = 0.0
+                if dt:
+                    row = ga4_data if dt >= threshold else super_data
+                    if not row.empty and col in row.columns:
+                        val = str(row[col].iloc[0]).replace(',', '').replace('$', '')
+                        val_num = pd.to_numeric(val, errors='coerce') if pd.notna(val) else 0.0
+                trend.append(val_num)
+            return trend
 
-        sales_metrics_options = ['Superset SEO销售额', 'GA4 SEO销售额']
-        sales_colors = {'Superset SEO销售额': '#FF6475', 'GA4 SEO销售额': '#FFB000'}
+        sales_metrics_options = ['Actual Sales (Hybrid)', 'GA4 SEO销售额', 'Superset SEO销售额']
+        sales_colors = {'Actual Sales (Hybrid)': '#22C55E', 'GA4 SEO销售额': '#FF6475', 'Superset SEO销售额': '#FFB000'}
 
         traffic_metrics_options = ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量']
         traffic_colors = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000'}
@@ -445,26 +510,27 @@ try:
         
         # Sales Chart
         st.markdown('<div class="soft-card" style="padding-bottom:10px;"><div class="flex-center" style="margin-bottom:20px; justify-content:space-between;"><div class="flex-center"><div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-chart-area"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span></div></div>', unsafe_allow_html=True)
-        selected_sales_metrics = st.multiselect("Select Sales Metrics", sales_metrics_options, default=['Superset SEO销售额'], label_visibility="collapsed", key="sales_sel")
+        selected_sales_metrics = st.multiselect("Select Sales Metrics", sales_metrics_options, default=['Actual Sales (Hybrid)'], label_visibility="collapsed", key="sales_sel")
         
         fig_sales = go.Figure()
-        if not selected_sales_metrics:
-            fig_sales.update_layout(annotations=[dict(text="Select at least one metric to display", xref="paper", yref="paper", showarrow=False, font=dict(size=14, color="#8E8CA7"))])
-        else:
+        if selected_sales_metrics:
             for metric in selected_sales_metrics:
                 color = sales_colors[metric]
-                s_trend1 = get_trend_series(metric, filtered_cols_1, True)
-                s_trend2 = get_trend_series(metric, filtered_cols_2, True) if filtered_cols_2 else []
+                
+                if metric == 'Actual Sales (Hybrid)':
+                    s_trend1 = get_hybrid_trend(filtered_cols_1)
+                    s_trend2 = get_hybrid_trend(filtered_cols_2) if filtered_cols_2 else []
+                else:
+                    s_trend1 = get_trend_series(metric, filtered_cols_1, True)
+                    s_trend2 = get_trend_series(metric, filtered_cols_2, True) if filtered_cols_2 else []
                 
                 if not s_trend2:
-                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1), hovertemplate=f'{metric}<br>Date: %{{x}}<br>Sales: $%{{y:,.2f}}<extra></extra>'))
+                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else:
                     max_len = max(len(s_trend1), len(s_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
-                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines', name=f'{metric} (Pri)', customdata=dates1, hovertemplate=f'{metric} - Pri (%{{customdata}})<br>Sales: $%{{y:,.2f}}<extra></extra>', fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1), line=dict(color=color, width=3, shape='spline')))
-                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines', name=f'{metric} (Cmp)', customdata=dates2, hovertemplate=f'{metric} - Cmp (%{{customdata}})<br>Sales: $%{{y:,.2f}}<extra></extra>', line=dict(color=color, width=3, dash='dash', shape='spline')))
-            
-            fig_sales.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=font_style))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline')))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline')))
             
         fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"))
         st.plotly_chart(fig_sales, use_container_width=True)
@@ -475,31 +541,25 @@ try:
         selected_traffic_metrics = st.multiselect("Select Traffic Metrics", traffic_metrics_options, default=['SEO流量'], label_visibility="collapsed", key="traf_sel")
         
         fig_traffic = go.Figure()
-        if not selected_traffic_metrics:
-            fig_traffic.update_layout(annotations=[dict(text="Select at least one metric to display", xref="paper", yref="paper", showarrow=False, font=dict(size=14, color="#8E8CA7"))])
-        else:
+        if selected_traffic_metrics:
             for metric in selected_traffic_metrics:
                 color = traffic_colors[metric]
                 t_trend1 = get_trend_series(metric, filtered_cols_1)
                 t_trend2 = get_trend_series(metric, filtered_cols_2) if filtered_cols_2 else []
                 
                 if not t_trend2: 
-                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1), hovertemplate=f'{metric}<br>Date: %{{x}}<br>Traffic: %{{y:,}}<extra></extra>'))
+                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else: 
                     max_len = max(len(t_trend1), len(t_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
-                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines', name=f'{metric} (Pri)', customdata=dates1, hovertemplate=f'{metric} - Pri (%{{customdata}})<br>Traffic: %{{y:,}}<extra></extra>', fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1), line=dict(color=color, width=3, shape='spline')))
-                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines', name=f'{metric} (Cmp)', customdata=dates2, hovertemplate=f'{metric} - Cmp (%{{customdata}})<br>Traffic: %{{y:,}}<extra></extra>', line=dict(color=color, width=3, dash='dash', shape='spline')))
-            
-            fig_traffic.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=font_style))
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline')))
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline')))
 
         fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
         st.plotly_chart(fig_traffic, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # ==========================================
-        # 7. Raw Data Table
-        # ==========================================
+        # Raw Table
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
         
         df_display = df_de[['Metric'] + filtered_cols_1].copy()
