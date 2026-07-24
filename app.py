@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import calendar
 import plotly.graph_objects as go
 
@@ -106,18 +106,22 @@ try:
     with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
         df_de = load_and_clean_data()
 
-        today = datetime.now().date()
-        current_year, current_month = today.year, today.month
+        # ==========================================
+        # ⭐ T-2 GA 数据延迟基准日逻辑
+        # ==========================================
+        real_today = datetime.now().date()
+        data_date = real_today - timedelta(days=2)  # MTD 记录时间延后2天
+        current_year, current_month = data_date.year, data_date.month
 
         # Welcome Banner
         st.markdown(f"""
         <div class="welcome-banner">
             <h1>Hallo, Callie DE Team! 🇩🇪</h1>
-            <p>Germany (DE) SEO Global Dashboard • Syncing Real-time Date: {today.strftime('%Y-%m-%d')}</p>
+            <p>Germany (DE) SEO Global Dashboard • Data Date: {data_date.strftime('%Y-%m-%d')} (T-2 GA Delay)</p>
         </div>
         """, unsafe_allow_html=True)
         
-        # UI目标输入：硬编码默认值已修改为 9000 和 23000！
+        # UI目标输入：硬编码默认值为 9000 和 23000
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
@@ -139,22 +143,26 @@ try:
                     date_mapping[col] = dt
                 except: pass
         
-        mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= today]
+        # MTD 截取到 data_date (T-2)
+        mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
 
+        # LM 自动对齐截取到对应的 T-2 天数
         lm_year = current_year if current_month > 1 else current_year - 1
         lm_month = current_month - 1 if current_month > 1 else 12
-        lm_day = min(today.day, calendar.monthrange(lm_year, lm_month)[1])
+        lm_day = min(data_date.day, calendar.monthrange(lm_year, lm_month)[1])
         lm_start = date(lm_year, lm_month, 1)
         lm_end = date(lm_year, lm_month, lm_day)
         lm_cols = [col for col, dt in date_mapping.items() if lm_start <= dt <= lm_end]
 
+        # LY 自动对齐截取到对应的 T-2 天数
         ly_year = current_year - 1
-        ly_day = min(today.day, calendar.monthrange(ly_year, current_month)[1])
+        ly_day = min(data_date.day, calendar.monthrange(ly_year, current_month)[1])
         ly_start = date(ly_year, current_month, 1)
         ly_end = date(ly_year, current_month, ly_day)
         ly_cols = [col for col, dt in date_mapping.items() if ly_start <= dt <= ly_end]
 
-        curr_str = f"({current_month:02d}/01 - {current_month:02d}/{today.day:02d})"
+        # UI 显示字符串更新为 T-2 日期
+        curr_str = f"({current_month:02d}/01 - {current_month:02d}/{data_date.day:02d})"
         lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
         ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
 
