@@ -257,7 +257,7 @@ try:
             </div>
             """, unsafe_allow_html=True)
 
-        # 3.2 MTD 同环比计算 (基于 GA4)
+        # 3.2 MTD 同环比计算
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-chart-simple"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">MTD Monitoring</h3></div>', unsafe_allow_html=True)
         def get_trend_ui(pct): return ("#FF6475" if pct < 0 else "#22C55E", "#FFF0F2" if pct < 0 else "#F0FDF4", "↓" if pct < 0 else "↑")
 
@@ -312,25 +312,39 @@ try:
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
-        # 4. 全局漏斗分析区间 (解除了 min/max value 限制)
+        # 4. 全局漏斗分析区间 (加入超大安全范围以隐藏系统默认下拉框，并找回自定义对比)
         # ==========================================
         valid_dates = list(date_mapping.values())
         min_date = min(valid_dates) if valid_dates else date.today()
         max_date = max(valid_dates) if valid_dates else date.today()
 
+        # ⭐ 放宽日历限制：隐藏默认下拉框，同时允许跨年份自由选择
+        min_allowed = date(2020, 1, 1)
+        max_allowed = date(2032, 12, 31)
+
         header_col1, header_col2, header_col3 = st.columns([1.5, 1, 1])
         with header_col1:
             st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-regular fa-calendar"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Interval Analysis</h3></div>', unsafe_allow_html=True)
-            st.caption("Modules below (Funnel & Table) are bounded by this selection.")
+            st.caption("Modules below are bounded by this selection.")
         with header_col2:
-            # 移除 min_value 和 max_value
-            primary_dates = st.date_input("🗓️ Primary Date Range", [min_date, max_date])
+            primary_dates = st.date_input("🗓️ Primary Date Range", [min_date, max_date], min_value=min_allowed, max_value=max_allowed)
+        
+        # ⭐ 把真正的"自定义日期对比"放回右上角！
         with header_col3:
-            st.write("") # 占位排版用
+            enable_compare = st.checkbox("🔄 Enable Trend Comparison")
+            if enable_compare:
+                compare_dates = st.date_input("🗓️ Compare Date Range", [min_date, max_date], min_value=min_allowed, max_value=max_allowed)
+            else: 
+                compare_dates = []
 
         if len(primary_dates) == 2: start_d1, end_d1 = primary_dates
         else: start_d1 = end_d1 = primary_dates[0]
         filtered_cols_1 = [col for col, dt in date_mapping.items() if start_d1 <= dt <= end_d1]
+
+        if enable_compare and len(compare_dates) == 2:
+            start_d2, end_d2 = compare_dates
+            filtered_cols_2 = [col for col, dt in date_mapping.items() if start_d2 <= dt <= end_d2]
+        else: filtered_cols_2 = []
 
         # ==========================================
         # 5. 区间漏斗与资产
@@ -375,7 +389,7 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # 销售拆解 
+        # 销售拆解
         st.markdown(f"""
         <div class="soft-card">
             <h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
@@ -435,7 +449,7 @@ try:
             """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 (独立图表时间轴 + 双重对比功能)
+        # 6. 图表与明细 (跟随全局的主/对比时间轴联动)
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -466,35 +480,11 @@ try:
         traffic_colors = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000'}
         
         font_style = dict(family="Poppins, sans-serif", color="#8E8CA7")
+        dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
         
         # ---------------- Sales Chart ----------------
         st.markdown('<div class="soft-card" style="padding-bottom:10px;"><div class="flex-center" style="margin-bottom:20px; justify-content:space-between;"><div class="flex-center"><div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-chart-area"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span></div></div>', unsafe_allow_html=True)
-        
-        # ⭐ Sales 专属独立对比选择器 (解除 min_value 和 max_value)
-        col_s_metric, col_s_d1, col_s_chk, col_s_d2 = st.columns([2.5, 1.5, 0.8, 1.5])
-        with col_s_metric:
-            selected_sales_metrics = st.multiselect("Select Sales Metrics", sales_metrics_options, default=['GA4 SEO销售额'], label_visibility="collapsed", key="sales_sel")
-        with col_s_d1:
-            sales_dates = st.date_input("🗓️ Primary", [min_date, max_date], label_visibility="collapsed", key="sales_date")
-        with col_s_chk:
-            st.markdown('<div style="margin-top:5px;"></div>', unsafe_allow_html=True)
-            enable_s_cmp = st.checkbox("☑️ Compare", key="s_cmp_chk")
-        with col_s_d2:
-            if enable_s_cmp:
-                sales_comp_dates = st.date_input("🗓️ Compare", [min_date, max_date], label_visibility="collapsed", key="sales_comp_date")
-            else:
-                sales_comp_dates = []
-                
-        if len(sales_dates) == 2: s_start, s_end = sales_dates
-        else: s_start = s_end = sales_dates[0]
-        sales_cols = [col for col, dt in date_mapping.items() if s_start <= dt <= s_end]
-        sales_dates_str = [date_mapping[d].strftime('%Y-%m-%d') for d in sales_cols]
-        
-        if enable_s_cmp and len(sales_comp_dates) == 2:
-            sc_start, sc_end = sales_comp_dates
-            sales_comp_cols = [col for col, dt in date_mapping.items() if sc_start <= dt <= sc_end]
-        else:
-            sales_comp_cols = []
+        selected_sales_metrics = st.multiselect("Select Sales Metrics", sales_metrics_options, default=['GA4 SEO销售额'], label_visibility="collapsed", key="sales_sel")
         
         fig_sales = go.Figure()
         if selected_sales_metrics:
@@ -502,11 +492,11 @@ try:
                 color = sales_colors[metric]
                 search_names = ['ga4seo销售额', 'ga4销售额'] if metric == 'GA4 SEO销售额' else ['supersetseo销售额', 'seo销售额', 'superset']
                 
-                s_trend1 = get_trend_series(search_names, sales_cols, True)
-                s_trend2 = get_trend_series(search_names, sales_comp_cols, True) if sales_comp_cols else []
+                s_trend1 = get_trend_series(search_names, filtered_cols_1, True)
+                s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
                 
                 if not s_trend2:
-                    fig_sales.add_trace(go.Scatter(x=sales_dates_str, y=s_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else:
                     max_len = max(len(s_trend1), len(s_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
@@ -519,32 +509,7 @@ try:
         
         # ---------------- Traffic Chart ----------------
         st.markdown('<div class="soft-card" style="padding-bottom:10px;"><div class="flex-center" style="margin-bottom:20px; justify-content:space-between;"><div class="flex-center"><div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span></div></div>', unsafe_allow_html=True)
-        
-        # ⭐ Traffic 专属独立对比选择器 (解除 min_value 和 max_value)
-        col_t_metric, col_t_d1, col_t_chk, col_t_d2 = st.columns([2.5, 1.5, 0.8, 1.5])
-        with col_t_metric:
-            selected_traffic_metrics = st.multiselect("Select Traffic Metrics", traffic_metrics_options, default=['SEO流量'], label_visibility="collapsed", key="traf_sel")
-        with col_t_d1:
-            traffic_dates = st.date_input("🗓️ Primary", [min_date, max_date], label_visibility="collapsed", key="traf_date")
-        with col_t_chk:
-            st.markdown('<div style="margin-top:5px;"></div>', unsafe_allow_html=True)
-            enable_t_cmp = st.checkbox("☑️ Compare", key="t_cmp_chk")
-        with col_t_d2:
-            if enable_t_cmp:
-                traffic_comp_dates = st.date_input("🗓️ Compare", [min_date, max_date], label_visibility="collapsed", key="traf_comp_date")
-            else:
-                traffic_comp_dates = []
-                
-        if len(traffic_dates) == 2: t_start, t_end = traffic_dates
-        else: t_start = t_end = traffic_dates[0]
-        traffic_cols = [col for col, dt in date_mapping.items() if t_start <= dt <= t_end]
-        traffic_dates_str = [date_mapping[d].strftime('%Y-%m-%d') for d in traffic_cols]
-        
-        if enable_t_cmp and len(traffic_comp_dates) == 2:
-            tc_start, tc_end = traffic_comp_dates
-            traffic_comp_cols = [col for col, dt in date_mapping.items() if tc_start <= dt <= tc_end]
-        else:
-            traffic_comp_cols = []
+        selected_traffic_metrics = st.multiselect("Select Traffic Metrics", traffic_metrics_options, default=['SEO流量'], label_visibility="collapsed", key="traf_sel")
         
         fig_traffic = go.Figure()
         if selected_traffic_metrics:
@@ -556,11 +521,11 @@ try:
                 if metric == '网站总流量': search_names = ['网站总流量', '总流量']
                 if metric == 'SEO流量': search_names = ['seo流量', '流量']
 
-                t_trend1 = get_trend_series(search_names, traffic_cols)
-                t_trend2 = get_trend_series(search_names, traffic_comp_cols) if traffic_comp_cols else []
+                t_trend1 = get_trend_series(search_names, filtered_cols_1)
+                t_trend2 = get_trend_series(search_names, filtered_cols_2) if filtered_cols_2 else []
                 
                 if not t_trend2: 
-                    fig_traffic.add_trace(go.Scatter(x=traffic_dates_str, y=t_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else: 
                     max_len = max(len(t_trend1), len(t_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
@@ -571,10 +536,9 @@ try:
         st.plotly_chart(fig_traffic, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Raw Table (仅受全局漏斗日期控制)
+        # Raw Table
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
         
-        dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
         df_display = df_de[['Metric'] + [c for c in filtered_cols_1 if c in df_de.columns]].copy()
         df_display.columns = ['Metric'] + dates1
         df_display = df_display.set_index('Metric')
