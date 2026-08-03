@@ -74,7 +74,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. Data Loader & Smart Matching 
+# 1. Data Loader & Smart Matching (极简模式)
 # ==========================================
 @st.cache_data(ttl=300)
 def load_and_clean_data():
@@ -114,7 +114,7 @@ try:
         data_date = real_today - timedelta(days=2)  # MTD 记录时间延后2天
         current_year, current_month = data_date.year, data_date.month
 
-        # Welcome Banner
+        # Welcome Banner (强制加载国旗图片)
         st.markdown(f"""
         <div class="welcome-banner">
             <h1>
@@ -125,7 +125,7 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # UI目标输入
+        # UI目标输入：硬编码默认值为 9000 和 23000
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
@@ -147,8 +147,10 @@ try:
                     date_mapping[col] = dt
                 except: pass
         
+        # MTD 截取到 data_date (T-2)
         mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
 
+        # LM 自动对齐截取到对应的 T-2 天数
         lm_year = current_year if current_month > 1 else current_year - 1
         lm_month = current_month - 1 if current_month > 1 else 12
         lm_day = min(data_date.day, calendar.monthrange(lm_year, lm_month)[1])
@@ -156,16 +158,19 @@ try:
         lm_end = date(lm_year, lm_month, lm_day)
         lm_cols = [col for col, dt in date_mapping.items() if lm_start <= dt <= lm_end]
 
+        # LY 自动对齐截取到对应的 T-2 天数
         ly_year = current_year - 1
         ly_day = min(data_date.day, calendar.monthrange(ly_year, current_month)[1])
         ly_start = date(ly_year, current_month, 1)
         ly_end = date(ly_year, current_month, ly_day)
         ly_cols = [col for col, dt in date_mapping.items() if ly_start <= dt <= ly_end]
 
+        # UI 显示字符串更新为 T-2 日期
         curr_str = f"({current_month:02d}/01 - {current_month:02d}/{data_date.day:02d})"
         lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
         ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
 
+        # 核心读取数据函数 (已加入防 nan 机制，空白统统算作 0)
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
@@ -181,6 +186,7 @@ try:
                 if valid_cols:
                     vals = data[valid_cols].iloc[0].astype(str).str.replace(',', '', regex=False)
                     if is_currency: vals = vals.str.replace('$', '', regex=False)
+                    # errors='coerce' 会把空白或无法识别的字符变为 NaN, fillna(0) 会把 NaN 变成 0
                     return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0.0
             
@@ -202,6 +208,7 @@ try:
                         return pd.to_numeric(val, errors='coerce')
             return 0
 
+        # ⭐ 德语站唯一销售额基准：无脑锁定 "ga4seo销售额" (对应 Google Sheet A27行)
         mtd_sales = get_sum(['ga4seo销售额', 'ga4销售额'], mtd_cols, True)
         lm_sales = get_sum(['ga4seo销售额', 'ga4销售额'], lm_cols, True)
         ly_sales = get_sum(['ga4seo销售额', 'ga4销售额'], ly_cols, True)
@@ -344,9 +351,8 @@ try:
         else: filtered_cols_2 = []
 
         # ==========================================
-        # 5. 区间漏斗与资产 (包含对比计算)
+        # 5. 区间漏斗与资产
         # ==========================================
-        # -- Primary Data --
         int_traffic = get_sum(['seo流量', '流量'], filtered_cols_1)
         int_blog = get_sum(['seo blog 流量', 'blog流量'], filtered_cols_1)
         int_insite = get_sum(['seo 站内流量', '站内流量'], filtered_cols_1)
@@ -370,50 +376,6 @@ try:
         google_backlinks = get_latest('外链', filtered_cols_1)
         google_domain = get_latest('外链域名广度', filtered_cols_1)
 
-        # -- Compare Data --
-        comp_traffic = get_sum(['seo流量', '流量'], filtered_cols_2) if filtered_cols_2 else 0
-        comp_blog = get_sum(['seo blog 流量', 'blog流量'], filtered_cols_2) if filtered_cols_2 else 0
-        comp_insite = get_sum(['seo 站内流量', '站内流量'], filtered_cols_2) if filtered_cols_2 else 0
-        comp_site_total = get_sum(['网站总流量', '总流量'], filtered_cols_2) if filtered_cols_2 else 0
-        
-        comp_bounce_rate = 0.0
-        if not bounce_data.empty and filtered_cols_2:
-            valid_br_cols_c = [c for c in filtered_cols_2 if c in bounce_data.columns]
-            if valid_br_cols_c:
-                br_vals_c = bounce_data[valid_br_cols_c].iloc[0].astype(str).str.replace('%', '', regex=False)
-                br_series_c = pd.to_numeric(br_vals_c, errors='coerce').dropna()
-                if not br_series_c.empty: comp_bounce_rate = br_series_c.mean()
-
-        comp_ga4_sales = get_sum(['ga4seo销售额', 'ga4销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
-        comp_super_sales = get_sum(['supersetseo销售额', 'seo销售额', 'superset'], filtered_cols_2, True) if filtered_cols_2 else 0
-
-        comp_ai_sales = get_sum(['aiassistant销售额', 'ai销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
-        comp_ai_traffic = get_sum(['aiassistant流量', 'ai流量'], filtered_cols_2) if filtered_cols_2 else 0
-        
-        comp_google_index = get_latest('收录', filtered_cols_2) if filtered_cols_2 else 0
-        comp_google_backlinks = get_latest('外链', filtered_cols_2) if filtered_cols_2 else 0
-        comp_google_domain = get_latest('外链域名广度', filtered_cols_2) if filtered_cols_2 else 0
-
-        # ⭐ 自动格式化对比 HTML 引擎
-        def format_cmp(v1, v2, is_curr=False, is_pct=False, inverse=False, dark_bg=False):
-            if not enable_compare: return ""
-            if v2 == 0 and v1 > 0: pct = 999999
-            elif v2 == 0 and v1 == 0: pct = 0
-            else: pct = ((v1 - v2) / v2) * 100
-            
-            v2_str = f"$ {v2:,.2f}" if is_curr else (f"{v2:.2f}%" if is_pct else f"{v2:,.0f}")
-            
-            if pct == 0:
-                c, arr, p_str = "#8E8CA7", "", "0.0%"
-            else:
-                # 如果是跳出率 (inverse=True)，越低越好，下降为绿，上升为红
-                c = "#22C55E" if (pct > 0 and not inverse) or (pct < 0 and inverse) else "#FF6475"
-                arr = "↑" if pct > 0 else "↓"
-                p_str = f"{abs(pct):.1f}%" if pct != 999999 else "+∞%"
-                
-            vs_c = "rgba(255,255,255,0.7)" if dark_bg else "#8E8CA7"
-            return f"<div style='font-size:13px; color:{vs_c}; font-weight:500; margin-top:4px;'>vs {v2_str} <span style='color:{c}; font-weight:700; margin-left:4px;'>{arr} {p_str}</span></div>"
-
         # 漏斗
         st.markdown(f"""
         <div class="soft-card">
@@ -421,31 +383,11 @@ try:
                 <div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-filter"></i></div> Traffic Funnel Health
             </h4>
             <div style="display: flex; justify-content: space-between; border-bottom: 2px dashed #F0F1F6; padding-bottom: 24px; margin-bottom: 18px;">
-                <div class="funnel-item" style="padding-left: 0;">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p>
-                    <p class="funnel-value">{int_traffic:,.0f}</p>
-                    {format_cmp(int_traffic, comp_traffic)}
-                </div>
-                <div class="funnel-item">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p>
-                    <p class="funnel-value">{int_blog:,.0f}</p>
-                    {format_cmp(int_blog, comp_blog)}
-                </div>
-                <div class="funnel-item">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p>
-                    <p class="funnel-value">{int_insite:,.0f}</p>
-                    {format_cmp(int_insite, comp_insite)}
-                </div>
-                <div class="funnel-item">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p>
-                    <p class="funnel-value">{int_site_total:,.0f}</p>
-                    {format_cmp(int_site_total, comp_site_total)}
-                </div>
-                <div class="funnel-item">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p>
-                    <p class="funnel-value">{int_bounce_rate:.2f}%</p>
-                    {format_cmp(int_bounce_rate, comp_bounce_rate, is_pct=True, inverse=True)}
-                </div>
+                <div class="funnel-item" style="padding-left: 0;"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p><p class="funnel-value">{int_traffic:,.0f}</p></div>
+                <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p><p class="funnel-value">{int_blog:,.0f}</p></div>
+                <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p><p class="funnel-value">{int_insite:,.0f}</p></div>
+                <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p><p class="funnel-value">{int_site_total:,.0f}</p></div>
+                <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p><p class="funnel-value">{int_bounce_rate:.2f}%</p></div>
             </div>
             <p class="text-muted" style="font-size: 12px; margin: 0;">✦ Real-time data mapped for Callie DE.</p>
         </div>
@@ -460,13 +402,11 @@ try:
             <div style="display: flex; gap: 20px;">
                 <div class="inner-box box-deep" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
                     <p class="box-label" style="justify-content: center; margin-bottom: 8px; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales (Primary Source)</p>
-                    <p class="box-value-white" style="font-size: 36px; margin: 0;">$ {int_ga4_sales:,.2f}</p>
-                    {format_cmp(int_ga4_sales, comp_ga4_sales, is_curr=True, dark_bg=True)}
+                    <p class="box-value-white" style="font-size: 36px;">$ {int_ga4_sales:,.2f}</p>
                 </div>
                 <div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
                     <p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p>
-                    <p class="box-value-dark" style="font-size: 36px; margin: 0;">$ {int_super_sales:,.2f}</p>
-                    {format_cmp(int_super_sales, comp_super_sales, is_curr=True)}
+                    <p class="box-value-dark" style="font-size: 36px;">$ {int_super_sales:,.2f}</p>
                 </div>
             </div>
         </div>
@@ -481,13 +421,11 @@ try:
                 <div style="display: flex; margin-top:24px;">
                     <div class="inner-box box-deep">
                         <p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p>
-                        <p class="box-value-white" style="margin: 0;">$ {ai_sales:,.2f}</p>
-                        {format_cmp(ai_sales, comp_ai_sales, is_curr=True, dark_bg=True)}
+                        <p class="box-value-white">$ {ai_sales:,.2f}</p>
                     </div>
                     <div class="inner-box box-light">
                         <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p>
-                        <p class="box-value-dark" style="margin: 0;">{ai_traffic:,.0f}</p>
-                        {format_cmp(ai_traffic, comp_ai_traffic)}
+                        <p class="box-value-dark">{ai_traffic:,.0f}</p>
                     </div>
                 </div>
             </div>
@@ -500,18 +438,15 @@ try:
                 <div style="display: flex; margin-top:24px;">
                     <div class="inner-box box-light" style="flex: 1.2;">
                         <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p>
-                        <p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>
-                        {format_cmp(google_index, comp_google_index)}
+                        <p class="box-value-dark">{google_index:,.0f}</p>
                     </div>
                     <div class="inner-box box-light">
                         <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p>
-                        <p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>
-                        {format_cmp(google_backlinks, comp_google_backlinks)}
+                        <p class="box-value-dark">{google_backlinks:,.0f}</p>
                     </div>
                     <div class="inner-box box-light">
                         <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p>
-                        <p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>
-                        {format_cmp(google_domain, comp_google_domain)}
+                        <p class="box-value-dark">{google_domain:,.0f}</p>
                     </div>
                 </div>
             </div>
