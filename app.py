@@ -125,16 +125,16 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # UI目标输入：硬编码默认值为 9000 和 23000
+        # UI目标输入：硬编码默认值修改为 8月份新目标 7500 和 20000
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
                 load_and_clean_data.clear()
                 st.rerun()
         with col_target1:
-            target_sales = st.number_input("🎯 DE Sales Target ($)", value=9000.0, step=500.0)
+            target_sales = st.number_input("🎯 DE Sales Target ($)", value=7500.0, step=500.0)
         with col_target2:
-            target_traffic = st.number_input("⚡ DE Traffic Target", value=23000.0, step=1000.0)
+            target_traffic = st.number_input("⚡ DE Traffic Target", value=20000.0, step=1000.0)
                 
         # ==========================================
         # 2. 日期匹配与强力清洗查表函数
@@ -147,10 +147,8 @@ try:
                     date_mapping[col] = dt
                 except: pass
         
-        # MTD 截取到 data_date (T-2)
         mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
 
-        # LM 自动对齐截取到对应的 T-2 天数
         lm_year = current_year if current_month > 1 else current_year - 1
         lm_month = current_month - 1 if current_month > 1 else 12
         lm_day = min(data_date.day, calendar.monthrange(lm_year, lm_month)[1])
@@ -158,19 +156,16 @@ try:
         lm_end = date(lm_year, lm_month, lm_day)
         lm_cols = [col for col, dt in date_mapping.items() if lm_start <= dt <= lm_end]
 
-        # LY 自动对齐截取到对应的 T-2 天数
         ly_year = current_year - 1
         ly_day = min(data_date.day, calendar.monthrange(ly_year, current_month)[1])
         ly_start = date(ly_year, current_month, 1)
         ly_end = date(ly_year, current_month, ly_day)
         ly_cols = [col for col, dt in date_mapping.items() if ly_start <= dt <= ly_end]
 
-        # UI 显示字符串更新为 T-2 日期
         curr_str = f"({current_month:02d}/01 - {current_month:02d}/{data_date.day:02d})"
         lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
         ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
 
-        # 核心读取数据函数 (已加入防 nan 机制，空白统统算作 0)
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
@@ -186,7 +181,6 @@ try:
                 if valid_cols:
                     vals = data[valid_cols].iloc[0].astype(str).str.replace(',', '', regex=False)
                     if is_currency: vals = vals.str.replace('$', '', regex=False)
-                    # errors='coerce' 会把空白或无法识别的字符变为 NaN, fillna(0) 会把 NaN 变成 0
                     return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0.0
             
@@ -208,7 +202,6 @@ try:
                         return pd.to_numeric(val, errors='coerce')
             return 0
 
-        # ⭐ 德语站唯一销售额基准：无脑锁定 "ga4seo销售额" (对应 Google Sheet A27行)
         mtd_sales = get_sum(['ga4seo销售额', 'ga4销售额'], mtd_cols, True)
         lm_sales = get_sum(['ga4seo销售额', 'ga4销售额'], lm_cols, True)
         ly_sales = get_sum(['ga4seo销售额', 'ga4销售额'], ly_cols, True)
@@ -393,7 +386,7 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # 销售拆解
+        # 销售拆解 
         st.markdown(f"""
         <div class="soft-card">
             <h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
