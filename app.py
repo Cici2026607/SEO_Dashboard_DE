@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 # 0. Page Config
 # ==========================================
 st.set_page_config(page_title="Callie DE - SEO Dashboard", page_icon="🇩🇪", layout="wide")
+
 # ================= 登录验证 =================
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -26,6 +27,7 @@ if not st.session_state["logged_in"]:
                 st.error("用户名或密码错误")
     st.stop()
 # ============================================
+
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
@@ -142,16 +144,16 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # UI目标输入：硬编码默认值为 9000 和 23000
+        # UI目标输入：硬编码默认值为 7500 和 20000
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
                 load_and_clean_data.clear()
                 st.rerun()
         with col_target1:
-            target_sales = st.number_input("🎯 DE Sales Target ($)", value=9000.0, step=500.0)
+            target_sales = st.number_input("🎯 DE Sales Target ($)", value=7500.0, step=500.0)
         with col_target2:
-            target_traffic = st.number_input("⚡ DE Traffic Target", value=23000.0, step=1000.0)
+            target_traffic = st.number_input("⚡ DE Traffic Target", value=20000.0, step=1000.0)
                 
         # ==========================================
         # 2. 日期匹配与强力清洗查表函数
@@ -470,7 +472,7 @@ try:
             """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细
+        # 6. 图表与明细 (添加了 AI Assistant 的选项)
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -494,11 +496,23 @@ try:
                     return pd.to_numeric(vals, errors='coerce').fillna(0).tolist()
             return []
 
-        sales_metrics_options = ['GA4 SEO销售额', 'Superset SEO销售额']
-        sales_colors = {'GA4 SEO销售额': '#FF6475', 'Superset SEO销售额': '#FFB000'}
+        # ⭐ 新增: AI Assistant 销售额选项及颜色 (紫色)
+        sales_metrics_options = ['GA4 SEO销售额', 'Superset SEO销售额', 'AI Assistant 销售额']
+        sales_colors = {
+            'GA4 SEO销售额': '#FF6475', 
+            'Superset SEO销售额': '#FFB000',
+            'AI Assistant 销售额': '#8B5CF6'
+        }
 
-        traffic_metrics_options = ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量']
-        traffic_colors = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000'}
+        # ⭐ 新增: AI Assistant 流量选项及颜色 (紫色)
+        traffic_metrics_options = ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量', 'AI Assistant 流量']
+        traffic_colors = {
+            'SEO流量': '#2D235C', 
+            'SEO Blog 流量': '#42D2E6', 
+            'SEO 站内流量': '#FF6475', 
+            '网站总流量': '#FFB000',
+            'AI Assistant 流量': '#8B5CF6'
+        }
         
         font_style = dict(family="Poppins, sans-serif", color="#8E8CA7")
         dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
@@ -512,7 +526,14 @@ try:
         if selected_sales_metrics:
             for metric in selected_sales_metrics:
                 color = sales_colors[metric]
-                search_names = ['ga4seo销售额', 'ga4销售额'] if metric == 'GA4 SEO销售额' else ['supersetseo销售额', 'seo销售额', 'superset']
+                
+                # 适配新增加的 AI Assistant 销售额
+                if metric == 'GA4 SEO销售额':
+                    search_names = ['ga4seo销售额', 'ga4销售额']
+                elif metric == 'AI Assistant 销售额':
+                    search_names = ['aiassistant销售额', 'ai销售额', 'aiassistant']
+                else:
+                    search_names = ['supersetseo销售额', 'seo销售额', 'superset']
                 
                 s_trend1 = get_trend_series(search_names, filtered_cols_1, True)
                 s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
@@ -537,11 +558,14 @@ try:
         if selected_traffic_metrics:
             for metric in selected_traffic_metrics:
                 color = traffic_colors[metric]
+                
+                # 适配新增加的 AI Assistant 流量
                 search_names = [metric.replace(' ', '').lower()]
                 if metric == 'SEO Blog 流量': search_names = ['seoblog流量', 'blog流量']
-                if metric == 'SEO 站内流量': search_names = ['seo站内流量', '站内流量']
-                if metric == '网站总流量': search_names = ['网站总流量', '总流量']
-                if metric == 'SEO流量': search_names = ['seo流量', '流量']
+                elif metric == 'SEO 站内流量': search_names = ['seo站内流量', '站内流量']
+                elif metric == '网站总流量': search_names = ['网站总流量', '总流量']
+                elif metric == 'AI Assistant 流量': search_names = ['aiassistant流量', 'ai流量', 'aiassistant']
+                elif metric == 'SEO流量': search_names = ['seo流量', '流量']
 
                 t_trend1 = get_trend_series(search_names, filtered_cols_1)
                 t_trend2 = get_trend_series(search_names, filtered_cols_2) if filtered_cols_2 else []
