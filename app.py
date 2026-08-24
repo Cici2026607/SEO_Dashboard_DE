@@ -13,16 +13,16 @@ def check_password():
     def password_entered():
         username = st.session_state.get("username_input", "").strip()
         password = st.session_state.get("password_input", "")
-        
-        if (
-            username in st.secrets.get("passwords", {})
-            and password == st.secrets["passwords"][username]
-        ):
-            st.session_state["authenticated"] = True
-            del st.session_state["password_input"]
-            del st.session_state["username_input"]
-        else:
-            st.session_state["authenticated"] = False
+
+        # 安全读取 secrets
+        if "passwords" in st.secrets and username in st.secrets["passwords"]:
+            if password == st.secrets["passwords"][username]:
+                st.session_state["authenticated"] = True
+                del st.session_state["password_input"]
+                del st.session_state["username_input"]
+                return
+
+        st.session_state["authenticated"] = False
 
     if st.session_state.get("authenticated", False):
         return True
@@ -40,7 +40,7 @@ def check_password():
     return False
 
 if not check_password():
-    st.stop()  # 未登录时停止执行后续所有代码
+    st.stop()
 # ============================================
 
 st.markdown("""
