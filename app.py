@@ -8,40 +8,40 @@ import plotly.graph_objects as go
 # 0. Page Config
 # ==========================================
 st.set_page_config(page_title="Callie DE - SEO Dashboard", page_icon="🇩🇪", layout="wide")
-# ================= 登录验证 =================
+import streamlit as st
+
+# ================= 官方标准登录验证 =================
 def check_password():
+    """返回 True 表示密码正确，否则拦截渲染登录界面"""
     def password_entered():
-        username = st.session_state.get("username_input", "").strip()
-        password = st.session_state.get("password_input", "")
+        u = st.session_state.get("username", "")
+        p = st.session_state.get("password", "")
+        if "passwords" in st.secrets and u in st.secrets["passwords"] and p == st.secrets["passwords"][u]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # 不在内存中保留密码
+            del st.session_state["username"]
+        else:
+            st.session_state["password_correct"] = False
 
-        # 安全读取 secrets
-        if "passwords" in st.secrets and username in st.secrets["passwords"]:
-            if password == st.secrets["passwords"][username]:
-                st.session_state["authenticated"] = True
-                del st.session_state["password_input"]
-                del st.session_state["username_input"]
-                return
-
-        st.session_state["authenticated"] = False
-
-    if st.session_state.get("authenticated", False):
-        return True
-
-    # 登录界面
-    st.markdown("### 🔐 Callie DE 登录")
-    with st.form("login_form"):
-        st.text_input("用户名", key="username_input")
-        st.text_input("密码", type="password", key="password_input")
-        st.form_submit_button("登录", on_click=password_entered)
-
-    if st.session_state.get("authenticated") is False:
+    if "password_correct" not in st.session_state:
+        st.markdown("### 🔐 Callie DE 登录")
+        st.text_input("用户名", key="username")
+        st.text_input("密码", type="password", key="password")
+        st.button("登录", on_click=password_entered)
+        return False
+    elif not st.session_state["password_correct"]:
+        st.markdown("### 🔐 Callie DE 登录")
+        st.text_input("用户名", key="username")
+        st.text_input("密码", type="password", key="password")
+        st.button("登录", on_click=password_entered)
         st.error("😕 用户名或密码错误，请重试")
-
-    return False
+        return False
+    else:
+        return True
 
 if not check_password():
     st.stop()
-# ============================================
+# ====================================================
 
 st.markdown("""
 <style>
