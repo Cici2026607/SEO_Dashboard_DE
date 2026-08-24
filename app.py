@@ -8,24 +8,6 @@ import plotly.graph_objects as go
 # 0. Page Config
 # ==========================================
 st.set_page_config(page_title="Callie DE - SEO Dashboard", page_icon="🇩🇪", layout="wide")
-# ================= 登录验证 =================
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-
-if not st.session_state["logged_in"]:
-    st.markdown("### 🔐 Callie DE 登录")
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        u = st.text_input("用户名")
-        p = st.text_input("密码", type="password")
-        if st.button("登录"):
-            if u == "Callie" and p == "calliede2026":
-                st.session_state["logged_in"] = True
-                st.rerun()
-            else:
-                st.error("用户名或密码错误")
-    st.stop()
-# ============================================
 
 st.markdown("""
 <style>
