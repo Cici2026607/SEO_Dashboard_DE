@@ -8,40 +8,24 @@ import plotly.graph_objects as go
 # 0. Page Config
 # ==========================================
 st.set_page_config(page_title="Callie DE - SEO Dashboard", page_icon="🇩🇪", layout="wide")
-import streamlit as st
+# ================= 登录验证 =================
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
 
-# ================= 官方标准登录验证 =================
-def check_password():
-    """返回 True 表示密码正确，否则拦截渲染登录界面"""
-    def password_entered():
-        u = st.session_state.get("username", "")
-        p = st.session_state.get("password", "")
-        if "passwords" in st.secrets and u in st.secrets["passwords"] and p == st.secrets["passwords"][u]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # 不在内存中保留密码
-            del st.session_state["username"]
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        st.markdown("### 🔐 Callie DE 登录")
-        st.text_input("用户名", key="username")
-        st.text_input("密码", type="password", key="password")
-        st.button("登录", on_click=password_entered)
-        return False
-    elif not st.session_state["password_correct"]:
-        st.markdown("### 🔐 Callie DE 登录")
-        st.text_input("用户名", key="username")
-        st.text_input("密码", type="password", key="password")
-        st.button("登录", on_click=password_entered)
-        st.error("😕 用户名或密码错误，请重试")
-        return False
-    else:
-        return True
-
-if not check_password():
+if not st.session_state["logged_in"]:
+    st.markdown("### 🔐 Callie DE 登录")
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        u = st.text_input("用户名")
+        p = st.text_input("密码", type="password")
+        if st.button("登录"):
+            if u == "Callie" and p == "calliede2026":
+                st.session_state["logged_in"] = True
+                st.rerun()
+            else:
+                st.error("用户名或密码错误")
     st.stop()
-# ====================================================
+# ============================================
 
 st.markdown("""
 <style>
