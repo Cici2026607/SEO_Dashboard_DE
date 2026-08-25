@@ -45,7 +45,6 @@ st.markdown("""
     }
     .soft-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.12), 0 10px 15px -5px rgba(15, 23, 42, 0.08); }
     
-    /* 🇩🇪 德国专属定制：黑 -> 深红 -> 质感金 的高级渐变 */
     .welcome-banner {
         background: linear-gradient(135deg, #1A1A24 0%, #9B1B30 65%, #D4AF37 100%); 
         border-radius: 28px; padding: 32px 40px; color: white; margin-bottom: 30px; 
@@ -248,12 +247,14 @@ try:
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
+            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
+                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -261,6 +262,7 @@ try:
                     if not matched.empty:
                         data = matched
                         break
+                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -496,14 +498,14 @@ try:
 <p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p>
 <div style="display: flex; margin-top:16px;">
 <div class="inner-box box-light" style="flex: 1.2;"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p><p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>{format_cmp(google_index, comp_google_index)}</div>
-<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark">{google_backlinks:,.0f}</p>{format_cmp(google_backlinks, comp_google_backlinks)}</div>
-<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark">{google_domain:,.0f}</p>{format_cmp(google_domain, comp_google_domain)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>{format_cmp(google_backlinks, comp_google_backlinks)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>{format_cmp(google_domain, comp_google_domain)}</div>
 </div>
 </div>
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细
+        # 6. 图表与明细 
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -590,6 +592,7 @@ try:
         if selected_traffic_metrics:
             for metric in selected_traffic_metrics:
                 color = traffic_colors[metric]
+                search_names = [metric.replace(' ', '').lower()]
                 if metric == 'SEO Blog 流量': search_names = ['seoblog流量']
                 elif metric == 'SEO 站内流量': search_names = ['seo站内流量']
                 elif metric == '网站总流量': search_names = ['网站总流量']
@@ -728,6 +731,7 @@ try:
         # 8. AI Performance Breakdown
         # ==========================================
         if date_col_ai and not df_ai.empty:
+            # AI Header (使用统一的白色标题栏)
             st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -794,8 +798,9 @@ try:
                 st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
-        # 9. Custom Comparison Table (手动录入 + 自动渲染)
+        # 9. Custom Comparison Table (手动录入 + 动态表头 + 自动计算)
         # ==========================================
+        # Table Header (统一白色标题栏)
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -826,6 +831,10 @@ try:
         if len(t_dates_2) == 2: t2_start, t2_end = t_dates_2
         else: t2_start = t2_end = t_dates_2[0]
 
+        # 动态生成表头标签 (跟随用户日历选择而改变)
+        col_label_ref = f"{t2_start.month}/{t2_start.day}-{t2_end.month}/{t2_end.day} (参照期)"
+        col_label_pri = f"{t1_start.month}/{t1_start.day}-{t1_end.month}/{t1_end.day} (本期)"
+
         # 15 项标准指标
         metrics_list = [
             "销售额（GA4）", "流量（GA4）", "流量（Blog）", "流量（站内）", 
@@ -836,20 +845,26 @@ try:
         ]
         currency_metrics = ["销售额（GA4）", "AI Assistant 销售额"]
 
-        # 初始化手动输入缓存数据
+        # 初始化手动输入缓存数据 (内部列名永远固定，以防数据丢失)
         if "manual_df" not in st.session_state:
             st.session_state.manual_df = pd.DataFrame({
                 "指标 (Metric)": metrics_list,
-                f"{t2_start.month}/{t2_start.day}-{t2_end.month}/{t2_end.day} (参照期)": [997.74, 3389, 2641, 666, 100, 221.60, 5322, 29405, 2049, 28723, 2308, 4461, 892, 161, 133],
-                f"{t1_start.month}/{t1_start.day}-{t1_end.month}/{t1_end.day} (本期)": [1272.99, 4002, 3276, 745, 153, 105.51, 6825, 35927, 2313, 34811, 3136, 5858, 993, 169, 140]
+                "参照期数值": [997.74, 3389, 2641, 666, 100, 221.60, 5322, 29405, 2049, 28723, 2308, 4461, 892, 161, 133],
+                "本期数值": [1272.99, 4002, 3276, 745, 153, 105.51, 6825, 35927, 2313, 34811, 3136, 5858, 993, 169, 140]
             })
 
         st.caption("✍️ **手动录入区**：双击单元格可直接修改数值（支持从 Excel 复制整列粘贴）：")
+        
+        # 渲染输入框，并通过 column_config 将固定的列名动态替换为真实日历日期
         edited_df = st.data_editor(
             st.session_state.manual_df, 
             hide_index=True, 
             use_container_width=True,
-            column_config={"指标 (Metric)": st.column_config.Column(disabled=True)}
+            column_config={
+                "指标 (Metric)": st.column_config.Column(disabled=True),
+                "参照期数值": st.column_config.Column(label=col_label_ref),
+                "本期数值": st.column_config.Column(label=col_label_pri)
+            }
         )
         st.session_state.manual_df = edited_df
 
@@ -862,7 +877,7 @@ try:
 <th style="padding: 16px; font-weight: 600; color: #2D235C; text-align: center;">指标 (Metric)</th>
 <th style="padding: 16px; font-weight: 600; color: #2D235C;">{t2_start.month}/{t2_start.day}-{t2_end.month}/{t2_end.day}</th>
 <th style="padding: 16px; font-weight: 600; color: #2D235C;">{t1_start.month}/{t1_start.day}-{t1_end.month}/{t1_end.day}</th>
-<th style="padding: 16px; font-weight: 600; color: #2D235C;">环比上周 (Change)</th>
+<th style="padding: 16px; font-weight: 600; color: #2D235C;">环比上期 (Change)</th>
 </tr>
 </thead>
 <tbody>
@@ -870,10 +885,10 @@ try:
         for i, row in edited_df.iterrows():
             m_name = row["指标 (Metric)"]
             
-            try: v2 = float(str(row.iloc[1]).replace(',', '').replace('$', '').replace('%', '').strip())
+            try: v2 = float(str(row["参照期数值"]).replace(',', '').replace('$', '').replace('%', '').strip())
             except: v2 = 0.0
             
-            try: v1 = float(str(row.iloc[2]).replace(',', '').replace('$', '').replace('%', '').strip())
+            try: v1 = float(str(row["本期数值"]).replace(',', '').replace('$', '').replace('%', '').strip())
             except: v1 = 0.0
             
             is_curr = m_name in currency_metrics
