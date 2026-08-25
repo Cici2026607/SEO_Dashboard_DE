@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, date, timedelta
 import calendar
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # ==========================================
 # 0. Page Config
@@ -93,7 +94,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. Data Loader & Smart Matching (极简模式)
+# 1. Data Loader & Smart Matching
 # ==========================================
 @st.cache_data(ttl=300)
 def load_and_clean_data():
@@ -122,9 +123,31 @@ def load_and_clean_data():
     
     return df_de[cols_to_keep]
 
+@st.cache_data(ttl=300)
+def load_gsc_data():
+    gsc_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdRQFVxjh71cKOiUdcf-j5Ob2GQzc_1WidEtXXx1tdc9Qjz5bWgzJtSEDbMU86i_4ATkmNV8rPITg1/pub?gid=0&single=true&output=csv"
+    bust_url = f"{gsc_url}&_t={int(datetime.now().timestamp())}"
+    df = pd.read_csv(bust_url)
+    
+    date_col = None
+    for col in df.columns:
+        if '日' in str(col) or 'date' in str(col).lower():
+            date_col = col
+            break
+            
+    if date_col:
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
+        df = df.dropna(subset=[date_col]).sort_values(date_col)
+        
+    return df, date_col
+
 try:
     with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
         df_de = load_and_clean_data()
+        try:
+            df_gsc, date_col_gsc = load_gsc_data()
+        except Exception:
+            df_gsc, date_col_gsc = pd.DataFrame(), None
 
         # ==========================================
         # ⭐ T-2 GA 数据延迟基准日逻辑
@@ -133,7 +156,7 @@ try:
         data_date = real_today - timedelta(days=2)  # MTD 记录时间延后2天
         current_year, current_month = data_date.year, data_date.month
 
-        # Welcome Banner (强制加载国旗图片)
+        # Welcome Banner
         st.markdown(f"""
         <div class="welcome-banner">
             <h1>
@@ -144,11 +167,11 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # UI目标输入：硬编码默认值为 7500 和 20000
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
                 load_and_clean_data.clear()
+                load_gsc_data.clear()
                 st.rerun()
         with col_target1:
             target_sales = st.number_input("🎯 DE Sales Target ($)", value=7500.0, step=500.0)
@@ -166,10 +189,8 @@ try:
                     date_mapping[col] = dt
                 except: pass
         
-        # MTD 截取到 data_date (T-2)
         mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
 
-        # LM 自动对齐截取到对应的 T-2 天数
         lm_year = current_year if current_month > 1 else current_year - 1
         lm_month = current_month - 1 if current_month > 1 else 12
         lm_day = min(data_date.day, calendar.monthrange(lm_year, lm_month)[1])
@@ -177,19 +198,16 @@ try:
         lm_end = date(lm_year, lm_month, lm_day)
         lm_cols = [col for col, dt in date_mapping.items() if lm_start <= dt <= lm_end]
 
-        # LY 自动对齐截取到对应的 T-2 天数
         ly_year = current_year - 1
         ly_day = min(data_date.day, calendar.monthrange(ly_year, current_month)[1])
         ly_start = date(ly_year, current_month, 1)
         ly_end = date(ly_year, current_month, ly_day)
         ly_cols = [col for col, dt in date_mapping.items() if ly_start <= dt <= ly_end]
 
-        # UI 显示字符串更新为 T-2 日期
         curr_str = f"({current_month:02d}/01 - {current_month:02d}/{data_date.day:02d})"
         lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
         ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
 
-        # 核心读取数据函数 (已加入防 nan 机制，空白统统算作 0)
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
@@ -205,7 +223,6 @@ try:
                 if valid_cols:
                     vals = data[valid_cols].iloc[0].astype(str).str.replace(',', '', regex=False)
                     if is_currency: vals = vals.str.replace('$', '', regex=False)
-                    # errors='coerce' 会把空白或无法识别的字符变为 NaN, fillna(0) 会把 NaN 变成 0
                     return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0.0
             
@@ -227,7 +244,6 @@ try:
                         return pd.to_numeric(val, errors='coerce')
             return 0
 
-        # ⭐ 德语站唯一销售额基准：无脑锁定 "ga4seo销售额" (对应 Google Sheet A27行)
         mtd_sales = get_sum(['ga4seo销售额', 'ga4销售额'], mtd_cols, True)
         lm_sales = get_sum(['ga4seo销售额', 'ga4销售额'], lm_cols, True)
         ly_sales = get_sum(['ga4seo销售额', 'ga4销售额'], ly_cols, True)
@@ -368,10 +384,24 @@ try:
             start_d2, end_d2 = compare_dates
             filtered_cols_2 = [col for col, dt in date_mapping.items() if start_d2 <= dt <= end_d2]
         else: filtered_cols_2 = []
+        
+        # 为 GSC 数据创建过滤后的 Dataset
+        if date_col_gsc and not df_gsc.empty:
+            mask_g1 = (df_gsc[date_col_gsc] >= start_d1) & (df_gsc[date_col_gsc] <= end_d1)
+            df_gsc_1 = df_gsc[mask_g1].copy()
+            if enable_compare and len(compare_dates) == 2:
+                mask_g2 = (df_gsc[date_col_gsc] >= start_d2) & (df_gsc[date_col_gsc] <= end_d2)
+                df_gsc_2 = df_gsc[mask_g2].copy()
+            else:
+                df_gsc_2 = pd.DataFrame()
+        else:
+            df_gsc_1 = pd.DataFrame()
+            df_gsc_2 = pd.DataFrame()
 
         # ==========================================
-        # 5. 区间漏斗与资产
+        # 5. 区间漏斗与资产 (包含对比计算)
         # ==========================================
+        # -- Primary Data --
         int_traffic = get_sum(['seo流量', '流量'], filtered_cols_1)
         int_blog = get_sum(['seo blog 流量', 'blog流量'], filtered_cols_1)
         int_insite = get_sum(['seo 站内流量', '站内流量'], filtered_cols_1)
@@ -395,6 +425,49 @@ try:
         google_backlinks = get_latest('外链', filtered_cols_1)
         google_domain = get_latest('外链域名广度', filtered_cols_1)
 
+        # -- Compare Data --
+        comp_traffic = get_sum(['seo流量', '流量'], filtered_cols_2) if filtered_cols_2 else 0
+        comp_blog = get_sum(['seo blog 流量', 'blog流量'], filtered_cols_2) if filtered_cols_2 else 0
+        comp_insite = get_sum(['seo 站内流量', '站内流量'], filtered_cols_2) if filtered_cols_2 else 0
+        comp_site_total = get_sum(['网站总流量', '总流量'], filtered_cols_2) if filtered_cols_2 else 0
+        
+        comp_bounce_rate = 0.0
+        if not bounce_data.empty and filtered_cols_2:
+            valid_br_cols_c = [c for c in filtered_cols_2 if c in bounce_data.columns]
+            if valid_br_cols_c:
+                br_vals_c = bounce_data[valid_br_cols_c].iloc[0].astype(str).str.replace('%', '', regex=False)
+                br_series_c = pd.to_numeric(br_vals_c, errors='coerce').dropna()
+                if not br_series_c.empty: comp_bounce_rate = br_series_c.mean()
+
+        comp_ga4_sales = get_sum(['ga4seo销售额', 'ga4销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
+        comp_super_sales = get_sum(['supersetseo销售额', 'seo销售额', 'superset'], filtered_cols_2, True) if filtered_cols_2 else 0
+
+        comp_ai_sales = get_sum(['aiassistant销售额', 'ai销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
+        comp_ai_traffic = get_sum(['aiassistant流量', 'ai流量'], filtered_cols_2) if filtered_cols_2 else 0
+        
+        comp_google_index = get_latest('收录', filtered_cols_2) if filtered_cols_2 else 0
+        comp_google_backlinks = get_latest('外链', filtered_cols_2) if filtered_cols_2 else 0
+        comp_google_domain = get_latest('外链域名广度', filtered_cols_2) if filtered_cols_2 else 0
+
+        # ⭐ 自动格式化对比引擎
+        def format_cmp(v1, v2, is_curr=False, is_pct=False, inverse=False, dark_bg=False):
+            if not enable_compare: return ""
+            if v2 == 0 and v1 > 0: pct = 999999
+            elif v2 == 0 and v1 == 0: pct = 0
+            else: pct = ((v1 - v2) / v2) * 100
+            
+            v2_str = f"$ {v2:,.2f}" if is_curr else (f"{v2:.2f}%" if is_pct else f"{v2:,.0f}")
+            
+            if pct == 0:
+                c, arr, p_str = "#8E8CA7", "", "0.0%"
+            else:
+                c = "#22C55E" if (pct > 0 and not inverse) or (pct < 0 and inverse) else "#FF6475"
+                arr = "↑" if pct > 0 else "↓"
+                p_str = f"{abs(pct):.1f}%" if pct != 999999 else "+∞%"
+                
+            vs_c = "rgba(255,255,255,0.7)" if dark_bg else "#8E8CA7"
+            return f"<div style='font-size:13px; color:{vs_c}; font-weight:500; margin-top:4px;'>vs {v2_str} <span style='color:{c}; font-weight:700; margin-left:4px;'>{arr} {p_str}</span></div>"
+
         # 漏斗
         st.markdown(f"""
         <div class="soft-card">
@@ -402,11 +475,31 @@ try:
                 <div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-filter"></i></div> Traffic Funnel Health
             </h4>
             <div style="display: flex; justify-content: space-between; border-bottom: 2px dashed #F0F1F6; padding-bottom: 24px; margin-bottom: 18px;">
-                <div class="funnel-item" style="padding-left: 0;"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p><p class="funnel-value">{int_traffic:,.0f}</p></div>
-                <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p><p class="funnel-value">{int_blog:,.0f}</p></div>
-                <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p><p class="funnel-value">{int_insite:,.0f}</p></div>
-                <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p><p class="funnel-value">{int_site_total:,.0f}</p></div>
-                <div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p><p class="funnel-value">{int_bounce_rate:.2f}%</p></div>
+                <div class="funnel-item" style="padding-left: 0;">
+                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p>
+                    <p class="funnel-value" style="margin: 0;">{int_traffic:,.0f}</p>
+                    {format_cmp(int_traffic, comp_traffic)}
+                </div>
+                <div class="funnel-item">
+                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p>
+                    <p class="funnel-value" style="margin: 0;">{int_blog:,.0f}</p>
+                    {format_cmp(int_blog, comp_blog)}
+                </div>
+                <div class="funnel-item">
+                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p>
+                    <p class="funnel-value" style="margin: 0;">{int_insite:,.0f}</p>
+                    {format_cmp(int_insite, comp_insite)}
+                </div>
+                <div class="funnel-item">
+                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p>
+                    <p class="funnel-value" style="margin: 0;">{int_site_total:,.0f}</p>
+                    {format_cmp(int_site_total, comp_site_total)}
+                </div>
+                <div class="funnel-item">
+                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p>
+                    <p class="funnel-value" style="margin: 0;">{int_bounce_rate:.2f}%</p>
+                    {format_cmp(int_bounce_rate, comp_bounce_rate, is_pct=True, inverse=True)}
+                </div>
             </div>
             <p class="text-muted" style="font-size: 12px; margin: 0;">✦ Real-time data mapped for Callie DE.</p>
         </div>
@@ -421,11 +514,13 @@ try:
             <div style="display: flex; gap: 20px;">
                 <div class="inner-box box-deep" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
                     <p class="box-label" style="justify-content: center; margin-bottom: 8px; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales (Primary Source)</p>
-                    <p class="box-value-white" style="font-size: 36px;">$ {int_ga4_sales:,.2f}</p>
+                    <p class="box-value-white" style="font-size: 36px; margin: 0;">$ {int_ga4_sales:,.2f}</p>
+                    {format_cmp(int_ga4_sales, comp_ga4_sales, is_curr=True, dark_bg=True)}
                 </div>
                 <div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
                     <p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p>
-                    <p class="box-value-dark" style="font-size: 36px;">$ {int_super_sales:,.2f}</p>
+                    <p class="box-value-dark" style="font-size: 36px; margin: 0;">$ {int_super_sales:,.2f}</p>
+                    {format_cmp(int_super_sales, comp_super_sales, is_curr=True)}
                 </div>
             </div>
         </div>
@@ -440,11 +535,13 @@ try:
                 <div style="display: flex; margin-top:24px;">
                     <div class="inner-box box-deep">
                         <p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p>
-                        <p class="box-value-white">$ {ai_sales:,.2f}</p>
+                        <p class="box-value-white" style="margin: 0;">$ {ai_sales:,.2f}</p>
+                        {format_cmp(ai_sales, comp_ai_sales, is_curr=True, dark_bg=True)}
                     </div>
                     <div class="inner-box box-light">
                         <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p>
-                        <p class="box-value-dark">{ai_traffic:,.0f}</p>
+                        <p class="box-value-dark" style="margin: 0;">{ai_traffic:,.0f}</p>
+                        {format_cmp(ai_traffic, comp_ai_traffic)}
                     </div>
                 </div>
             </div>
@@ -457,22 +554,25 @@ try:
                 <div style="display: flex; margin-top:24px;">
                     <div class="inner-box box-light" style="flex: 1.2;">
                         <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p>
-                        <p class="box-value-dark">{google_index:,.0f}</p>
+                        <p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>
+                        {format_cmp(google_index, comp_google_index)}
                     </div>
                     <div class="inner-box box-light">
                         <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p>
-                        <p class="box-value-dark">{google_backlinks:,.0f}</p>
+                        <p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>
+                        {format_cmp(google_backlinks, comp_google_backlinks)}
                     </div>
                     <div class="inner-box box-light">
                         <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p>
-                        <p class="box-value-dark">{google_domain:,.0f}</p>
+                        <p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>
+                        {format_cmp(google_domain, comp_google_domain)}
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 (添加了 AI Assistant 的选项)
+        # 6. 图表与明细 (支持 AI Assistant 选项)
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -496,7 +596,6 @@ try:
                     return pd.to_numeric(vals, errors='coerce').fillna(0).tolist()
             return []
 
-        # ⭐ 新增: AI Assistant 销售额选项及颜色 (紫色)
         sales_metrics_options = ['GA4 SEO销售额', 'Superset SEO销售额', 'AI Assistant 销售额']
         sales_colors = {
             'GA4 SEO销售额': '#FF6475', 
@@ -504,7 +603,6 @@ try:
             'AI Assistant 销售额': '#8B5CF6'
         }
 
-        # ⭐ 新增: AI Assistant 流量选项及颜色 (紫色)
         traffic_metrics_options = ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量', 'AI Assistant 流量']
         traffic_colors = {
             'SEO流量': '#2D235C', 
@@ -526,14 +624,9 @@ try:
         if selected_sales_metrics:
             for metric in selected_sales_metrics:
                 color = sales_colors[metric]
-                
-                # 适配新增加的 AI Assistant 销售额
-                if metric == 'GA4 SEO销售额':
-                    search_names = ['ga4seo销售额', 'ga4销售额']
-                elif metric == 'AI Assistant 销售额':
-                    search_names = ['aiassistant销售额', 'ai销售额', 'aiassistant']
-                else:
-                    search_names = ['supersetseo销售额', 'seo销售额', 'superset']
+                if metric == 'GA4 SEO销售额': search_names = ['ga4seo销售额', 'ga4销售额']
+                elif metric == 'AI Assistant 销售额': search_names = ['aiassistant销售额', 'ai销售额', 'aiassistant']
+                else: search_names = ['supersetseo销售额', 'seo销售额', 'superset']
                 
                 s_trend1 = get_trend_series(search_names, filtered_cols_1, True)
                 s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
@@ -558,8 +651,6 @@ try:
         if selected_traffic_metrics:
             for metric in selected_traffic_metrics:
                 color = traffic_colors[metric]
-                
-                # 适配新增加的 AI Assistant 流量
                 search_names = [metric.replace(' ', '').lower()]
                 if metric == 'SEO Blog 流量': search_names = ['seoblog流量', 'blog流量']
                 elif metric == 'SEO 站内流量': search_names = ['seo站内流量', '站内流量']
@@ -582,7 +673,72 @@ try:
         st.plotly_chart(fig_traffic, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Raw Table
+        # ==========================================
+        # 7. GSC Performance Breakdown (全新新增模块)
+        # ==========================================
+        if date_col_gsc and not df_gsc.empty:
+            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-orange"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">GSC Performance Breakdown</h3></div>', unsafe_allow_html=True)
+            st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
+            
+            gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
+            gsc_tabs = st.tabs(gsc_segments)
+            cols_list = list(df_gsc.columns)
+            
+            for i, tab in enumerate(gsc_tabs):
+                with tab:
+                    # 智能列名映射：基于标准列分布 (第0列是日期，每4列一组)
+                    base_idx = 1 + i * 4
+                    c_clk = cols_list[base_idx] if base_idx < len(cols_list) else cols_list[-1]
+                    c_imp = cols_list[base_idx+1] if base_idx+1 < len(cols_list) else cols_list[-1]
+                    c_ctr = cols_list[base_idx+2] if base_idx+2 < len(cols_list) else cols_list[-1]
+                    c_pos = cols_list[base_idx+3] if base_idx+3 < len(cols_list) else cols_list[-1]
+                    
+                    # 提供容错的手动映射面板
+                    with st.expander(f"⚙️ 数据列映射 (如上方图表无数据，请点此手动指定列)"):
+                        c1, c2, c3, c4 = st.columns(4)
+                        with c1: c_clk = st.selectbox("点击次数 (Clicks)", cols_list, index=cols_list.index(c_clk), key=f"clk_{i}")
+                        with c2: c_imp = st.selectbox("展示 (Impressions)", cols_list, index=cols_list.index(c_imp), key=f"imp_{i}")
+                        with c3: c_ctr = st.selectbox("点击率 (CTR)", cols_list, index=cols_list.index(c_ctr), key=f"ctr_{i}")
+                        with c4: c_pos = st.selectbox("排名 (Position)", cols_list, index=cols_list.index(c_pos), key=f"pos_{i}")
+                    
+                    if not df_gsc_1.empty:
+                        dates_g1 = df_gsc_1[date_col_gsc].astype(str).tolist()
+                        
+                        def clean_gsc(s):
+                            if pd.isna(s): return 0
+                            return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+                            
+                        # 获取 Primary 数据
+                        y_clk1 = df_gsc_1[c_clk].apply(clean_gsc).fillna(0).tolist()
+                        y_imp1 = df_gsc_1[c_imp].apply(clean_gsc).fillna(0).tolist()
+                        y_ctr1 = df_gsc_1[c_ctr].apply(clean_gsc).fillna(0).tolist()
+                        y_pos1 = df_gsc_1[c_pos].apply(clean_gsc).fillna(0).tolist()
+                        
+                        # 图 1：点击 (柱状) + 展示 (折线)
+                        fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
+                        fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数 (Clicks)", marker_color='#42D2E6', opacity=0.8), secondary_y=False)
+                        fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines', name="展示 (Impressions)", line=dict(color='#8B5CF6', width=2)), secondary_y=True)
+                        fig_g1.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.02, x=1, xanchor="right"))
+                        fig_g1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                        fig_g1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
+                        st.plotly_chart(fig_g1, use_container_width=True)
+                        
+                        # 图 2：点击率 (折线) + 排名 (折线反转)
+                        fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
+                        fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines', name="点击率 (CTR %)", line=dict(color='#22C55E', width=2)), secondary_y=False)
+                        fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines', name="排名 (Position, 越小越好)", line=dict(color='#FF6475', width=2, dash='dot')), secondary_y=True)
+                        fig_g2.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.02, x=1, xanchor="right"))
+                        fig_g2.update_yaxes(autorange="reversed", secondary_y=True) # 排名自动反转 (1在上)
+                        fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                        fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
+                        st.plotly_chart(fig_g2, use_container_width=True)
+                    else:
+                        st.info("该时间区间内没有 GSC 数据。")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ==========================================
+        # 8. Raw Tables (展示所有底层原生数据)
+        # ==========================================
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
         
         df_display = df_de[['Metric'] + [c for c in filtered_cols_1 if c in df_de.columns]].copy()
@@ -590,8 +746,14 @@ try:
         df_display = df_display.set_index('Metric')
         
         st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
-        st.dataframe(df_display, use_container_width=True, height=450)
+        st.dataframe(df_display, use_container_width=True, height=350)
         st.markdown('</div>', unsafe_allow_html=True)
+        
+        if date_col_gsc and not df_gsc.empty:
+            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (GSC 点击量)</h3></div>', unsafe_allow_html=True)
+            st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
+            st.dataframe(df_gsc_1, use_container_width=True, height=350)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
     st.error("Error occurred during rendering:")
