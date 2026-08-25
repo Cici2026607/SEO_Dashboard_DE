@@ -245,12 +245,10 @@ try:
         lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
         ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
 
-        # 🔥 两段式精准捕获引擎 (Exact Match -> Fallback)
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
             
-            # 第一段：绝对精准匹配
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
@@ -258,7 +256,6 @@ try:
                     data = matched
                     break
                     
-            # 第二段：包含匹配保底
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -544,7 +541,17 @@ try:
         dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
         dates2 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_2] if filtered_cols_2 else []
         
-        st.markdown('<div class="soft-card" style="padding-bottom:10px;"><div class="flex-center" style="margin-bottom:20px; justify-content:space-between;"><div class="flex-center"><div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-chart-area"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span></div></div>', unsafe_allow_html=True)
+        # Sales Chart (使用统一的白色标题栏)
+        st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-red flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-chart-area"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
         selected_sales_metrics = st.multiselect("Select Sales Metrics", sales_metrics_options, default=['GA4 SEO销售额'], label_visibility="collapsed", key="sales_sel")
         
         fig_sales = go.Figure()
@@ -568,15 +575,25 @@ try:
             
         fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"))
         st.plotly_chart(fig_sales, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
         
-        st.markdown('<div class="soft-card" style="padding-bottom:10px;"><div class="flex-center" style="margin-bottom:20px; justify-content:space-between;"><div class="flex-center"><div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span></div></div>', unsafe_allow_html=True)
+        # Traffic Chart (使用统一的白色标题栏)
+        st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-blue flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-chart-line"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
         selected_traffic_metrics = st.multiselect("Select Traffic Metrics", traffic_metrics_options, default=['SEO流量'], label_visibility="collapsed", key="traf_sel")
         
         fig_traffic = go.Figure()
         if selected_traffic_metrics:
             for metric in selected_traffic_metrics:
                 color = traffic_colors[metric]
+                search_names = [metric.replace(' ', '').lower()]
                 if metric == 'SEO Blog 流量': search_names = ['seoblog流量']
                 elif metric == 'SEO 站内流量': search_names = ['seo站内流量']
                 elif metric == '网站总流量': search_names = ['网站总流量']
@@ -596,13 +613,22 @@ try:
 
         fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
         st.plotly_chart(fig_traffic, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
         # 7. GSC Performance Breakdown 
         # ==========================================
         if date_col_gsc and not df_gsc.empty:
-            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-orange"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">GSC Performance Breakdown</h3></div>', unsafe_allow_html=True)
+            # GSC Header (使用统一的白色标题栏)
+            st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-orange flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-brands fa-google"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">GSC Performance Breakdown</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
             
             col_gd1, col_gchk, col_gd2 = st.columns([1.5, 1, 1.5])
             with col_gd1:
@@ -629,7 +655,6 @@ try:
                 mask_g2 = (df_gsc[date_col_gsc] >= gc_start) & (df_gsc[date_col_gsc] <= gc_end)
                 df_gsc_2 = df_gsc[mask_g2].copy()
 
-            st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
             gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_tabs = st.tabs(gsc_segments)
             
@@ -703,13 +728,22 @@ try:
                         st.plotly_chart(fig_g2, use_container_width=True)
                     else:
                         st.info("所选时间段暂无 GSC 数据。")
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
         # 8. AI Performance Breakdown
         # ==========================================
         if date_col_ai and not df_ai.empty:
-            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-microchip"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">AI Performance Breakdown</h3></div>', unsafe_allow_html=True)
+            # AI Header (使用统一的白色标题栏)
+            st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-purple flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-microchip"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">AI Performance Breakdown</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
             
             col_ad1, col_achk, col_ad2 = st.columns([1.5, 1, 1.5])
             with col_ad1:
@@ -735,8 +769,6 @@ try:
                 ac_start, ac_end = ai_comp_dates
                 mask_a2 = (df_ai[date_col_ai] >= ac_start) & (df_ai[date_col_ai] <= ac_end)
                 df_ai_2 = df_ai[mask_a2].copy()
-
-            st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
             
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
@@ -766,12 +798,21 @@ try:
                 st.plotly_chart(fig_ai, use_container_width=True)
             elif df_ai_1.empty:
                 st.info("所选时间段暂无 AI Performance 数据。")
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
-        # 9. Custom Comparison Table (周数据精准对比矩阵)
+        # 9. Custom Comparison Table
         # ==========================================
-        st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-blue"><i class="fa-solid fa-table-list"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Custom Period Comparison</h3></div>', unsafe_allow_html=True)
+        # Table Header (统一白色标题栏)
+        st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-blue flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-table-list"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Weekly Data Comparison</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
         
         col_td1, col_tspace, col_td2 = st.columns([1.5, 0.5, 1.5])
         default_t1_end = data_date
@@ -801,12 +842,10 @@ try:
         df_ai_t1 = df_ai[(df_ai[date_col_ai] >= t1_start) & (df_ai[date_col_ai] <= t1_end)] if date_col_ai and not df_ai.empty else pd.DataFrame()
         df_ai_t2 = df_ai[(df_ai[date_col_ai] >= t2_start) & (df_ai[date_col_ai] <= t2_end)] if date_col_ai and not df_ai.empty else pd.DataFrame()
 
-        # 🔥 第二阶段精准匹配引擎：彻底解决串台误差
         def get_fusion_sum(df_source, target_strs):
             if df_source.empty: return 0
             if isinstance(target_strs, str): target_strs = [target_strs]
             
-            # 第一段：只抓取名字一模一样的列
             for t in target_strs:
                 t_clean = str(t).replace(' ', '').replace('（', '(').replace('）', ')').lower()
                 for col in df_source.columns:
@@ -815,7 +854,6 @@ try:
                         vals = df_source[col].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
                         return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
                         
-            # 第二段：如果一模一样的找不到，再找包含该字眼的列
             for t in target_strs:
                 t_clean = str(t).replace(' ', '').replace('（', '(').replace('）', ')').lower()
                 for col in df_source.columns:
@@ -825,7 +863,6 @@ try:
                         return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0
 
-        # 指标配置：名称 | 数据源 | 核心搜索词(精准锁定) | 是否加$符号
         table_metrics = [
             ("销售额（GA4）", "de", ['ga4seo销售额'], True),
             ("流量（GA4）", "de", ['seo流量'], False),
@@ -844,9 +881,8 @@ try:
             ("点击（非品牌词非Blog非utm）", "gsc", ["点击(非品牌词非blog非utm)_点击次数"], False)
         ]
 
-        # 完美对齐的 HTML 原生排版 (严格列位: 参照日 -> 本期日 -> 环比)
         html_table = f"""
-<div class="soft-card" style="padding: 0; overflow: hidden;">
+<div class="soft-card" style="padding: 0; overflow: hidden; margin-top: 10px;">
 <table style="width: 100%; border-collapse: collapse; text-align: center; font-family: 'Poppins', sans-serif;">
 <thead style="background-color: #F8FAFC; border-bottom: 2px solid #E2E8F0;">
 <tr>
@@ -899,27 +935,48 @@ try:
         # ==========================================
         # 10. Raw Tables (底层数据透视)
         # ==========================================
-        st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-database"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
+        # Raw Data Header (统一白色标题栏)
+        st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-gray flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-database"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Raw Data Matrix (Callie DE)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
         
         df_display = df_de[['Metric'] + [c for c in filtered_cols_1 if c in df_de.columns]].copy()
         df_display.columns = ['Metric'] + dates1
         df_display = df_display.set_index('Metric')
-        
-        st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
         st.dataframe(df_display, use_container_width=True, height=350)
-        st.markdown('</div>', unsafe_allow_html=True)
         
         if date_col_gsc and not df_gsc.empty:
-            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (GSC)</h3></div>', unsafe_allow_html=True)
-            st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
+            st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-gray flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-brands fa-google"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Raw Data Matrix (GSC)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
             st.dataframe(df_gsc_1, use_container_width=True, height=350)
-            st.markdown('</div>', unsafe_allow_html=True)
             
         if date_col_ai and not df_ai.empty:
-            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-microchip"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (AI Performance)</h3></div>', unsafe_allow_html=True)
-            st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
+            st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-gray flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-microchip"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Raw Data Matrix (AI Performance)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
             st.dataframe(df_ai_1, use_container_width=True, height=350)
-            st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
     st.error("Error occurred during rendering:")
