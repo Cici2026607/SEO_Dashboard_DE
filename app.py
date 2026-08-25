@@ -94,7 +94,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. Data Loader & Smart Matching
+# 1. Data Loader & Smart Matching 
 # ==========================================
 @st.cache_data(ttl=300)
 def load_and_clean_data():
@@ -125,20 +125,15 @@ def load_and_clean_data():
 
 @st.cache_data(ttl=300)
 def load_gsc_data():
+    # 强制将 pubhtml 转换为 csv 输出以便于精准抓取
     gsc_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdRQFVxjh71cKOiUdcf-j5Ob2GQzc_1WidEtXXx1tdc9Qjz5bWgzJtSEDbMU86i_4ATkmNV8rPITg1/pub?gid=0&single=true&output=csv"
     bust_url = f"{gsc_url}&_t={int(datetime.now().timestamp())}"
     df = pd.read_csv(bust_url)
     
-    date_col = None
-    for col in df.columns:
-        if '日' in str(col) or 'date' in str(col).lower():
-            date_col = col
-            break
-            
-    if date_col:
-        df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
-        df = df.dropna(subset=[date_col]).sort_values(date_col)
-        
+    # 获取第一列作为日期基准
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
+    df = df.dropna(subset=[date_col]).sort_values(date_col)
     return df, date_col
 
 try:
@@ -153,20 +148,21 @@ try:
         # ⭐ T-2 GA 数据延迟基准日逻辑
         # ==========================================
         real_today = datetime.now().date()
-        data_date = real_today - timedelta(days=2)  # MTD 记录时间延后2天
+        data_date = real_today - timedelta(days=2)
         current_year, current_month = data_date.year, data_date.month
 
-        # Welcome Banner
+        # Welcome Banner (零缩进防错排版)
         st.markdown(f"""
-        <div class="welcome-banner">
-            <h1>
-                <img src="https://flagcdn.com/w80/de.png" style="height: 36px; margin-right: 16px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);" alt="Germany Flag">
-                Hallo, Callie DE Team!
-            </h1>
-            <p>Germany (DE) SEO Global Dashboard • Data Date: {data_date.strftime('%Y-%m-%d')} (T-2 GA Delay)</p>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="welcome-banner">
+<h1>
+<img src="https://flagcdn.com/w80/de.png" style="height: 36px; margin-right: 16px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);" alt="Germany Flag">
+Hallo, Callie DE Team!
+</h1>
+<p>Germany (DE) SEO Global Dashboard • Data Date: {data_date.strftime('%Y-%m-%d')} (T-2 GA Delay)</p>
+</div>
+""", unsafe_allow_html=True)
         
+        # 8月新目标
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
@@ -263,45 +259,45 @@ try:
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
-            <div class="soft-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-sack-dollar" style="color:#FF6475; margin-right:8px;"></i> Sales Progress (GA4 Data)</div>
-                    <div style="color: #FF6475; font-size: 14px; font-weight: 700;">Gap: $ {gap_sales:,.2f}</div>
-                </div>
-                <div style="margin-bottom: 28px; display: flex; align-items: baseline;">
-                    <span class="text-main" style="font-size: 38px; font-weight: 700;">$ {mtd_sales:,.2f}</span>
-                    <span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ $ {target_sales:,.2f}</span>
-                </div>
-                <div class="progress-track">
-                    <div class="progress-fill-red" style="width: {prog_sales*100}%;"></div>
-                    <span class="rocket-icon">🎯</span>
-                </div>
-                <div style="text-align: right; margin-top: 16px;">
-                    <span style="color: #FF6475; font-weight: 800; font-size: 18px;">{prog_sales*100:.1f}%</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+<div class="soft-card">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+<div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-sack-dollar" style="color:#FF6475; margin-right:8px;"></i> Sales Progress (GA4 Data)</div>
+<div style="color: #FF6475; font-size: 14px; font-weight: 700;">Gap: $ {gap_sales:,.2f}</div>
+</div>
+<div style="margin-bottom: 28px; display: flex; align-items: baseline;">
+<span class="text-main" style="font-size: 38px; font-weight: 700;">$ {mtd_sales:,.2f}</span>
+<span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ $ {target_sales:,.2f}</span>
+</div>
+<div class="progress-track">
+<div class="progress-fill-red" style="width: {prog_sales*100}%;"></div>
+<span class="rocket-icon">🎯</span>
+</div>
+<div style="text-align: right; margin-top: 16px;">
+<span style="color: #FF6475; font-weight: 800; font-size: 18px;">{prog_sales*100:.1f}%</span>
+</div>
+</div>
+""", unsafe_allow_html=True)
             
         with col2:
             st.markdown(f"""
-            <div class="soft-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-users" style="color:#42D2E6; margin-right:8px;"></i> Traffic Progress</div>
-                    <div style="color: #42D2E6; font-size: 14px; font-weight: 700;">Gap: {gap_traffic:,.0f}</div>
-                </div>
-                <div style="margin-bottom: 28px; display: flex; align-items: baseline;">
-                    <span class="text-main" style="font-size: 38px; font-weight: 700;">{mtd_traffic:,.0f}</span>
-                    <span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ {target_traffic:,.0f}</span>
-                </div>
-                <div class="progress-track">
-                    <div class="progress-fill-blue" style="width: {prog_traffic*100}%;"></div>
-                    <span class="rocket-icon">⚡</span>
-                </div>
-                <div style="text-align: right; margin-top: 16px;">
-                    <span style="color: #42D2E6; font-weight: 800; font-size: 18px;">{prog_traffic*100:.1f}%</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+<div class="soft-card">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+<div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-users" style="color:#42D2E6; margin-right:8px;"></i> Traffic Progress</div>
+<div style="color: #42D2E6; font-size: 14px; font-weight: 700;">Gap: {gap_traffic:,.0f}</div>
+</div>
+<div style="margin-bottom: 28px; display: flex; align-items: baseline;">
+<span class="text-main" style="font-size: 38px; font-weight: 700;">{mtd_traffic:,.0f}</span>
+<span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ {target_traffic:,.0f}</span>
+</div>
+<div class="progress-track">
+<div class="progress-fill-blue" style="width: {prog_traffic*100}%;"></div>
+<span class="rocket-icon">⚡</span>
+</div>
+<div style="text-align: right; margin-top: 16px;">
+<span style="color: #42D2E6; font-weight: 800; font-size: 18px;">{prog_traffic*100:.1f}%</span>
+</div>
+</div>
+""", unsafe_allow_html=True)
 
         # 3.2 MTD 同环比计算
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-chart-simple"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">MTD Monitoring</h3></div>', unsafe_allow_html=True)
@@ -313,23 +309,23 @@ try:
         c1_y, bg1_y, arr1_y = get_trend_ui(yoy_sales_pct)
 
         st.markdown(f"""
-        <div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
-            <div style="flex: 1;">
-                <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Sales MTD (GA4) <span class="compare-date-str">{curr_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 32px;">$ {mtd_sales:,.2f}</h2>
-            </div>
-            <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
-                <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {lm_sales:,.2f}</h2>
-                <span style="color: {c1_m}; font-weight: 600; background: {bg1_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_m} {abs(mom_sales_pct):.1f}% MoM</span>
-            </div>
-            <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
-                <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {ly_sales:,.2f}</h2>
-                <span style="color: {c1_y}; font-weight: 600; background: {bg1_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_y} {abs(yoy_sales_pct):.1f}% YoY</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
+<div style="flex: 1;">
+<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Sales MTD (GA4) <span class="compare-date-str">{curr_str}</span></p>
+<h2 class="text-main" style="margin: 0; font-size: 32px;">$ {mtd_sales:,.2f}</h2>
+</div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
+<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p>
+<h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {lm_sales:,.2f}</h2>
+<span style="color: {c1_m}; font-weight: 600; background: {bg1_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_m} {abs(mom_sales_pct):.1f}% MoM</span>
+</div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
+<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p>
+<h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {ly_sales:,.2f}</h2>
+<span style="color: {c1_y}; font-weight: 600; background: {bg1_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_y} {abs(yoy_sales_pct):.1f}% YoY</span>
+</div>
+</div>
+""", unsafe_allow_html=True)
         
         mom_traf_pct = ((mtd_traffic - lm_traffic) / lm_traffic) * 100 if lm_traffic > 0 else 0.0
         yoy_traf_pct = ((mtd_traffic - ly_traffic) / ly_traffic) * 100 if ly_traffic > 0 else 0.0
@@ -337,23 +333,23 @@ try:
         c2_y, bg2_y, arr2_y = get_trend_ui(yoy_traf_pct)
 
         st.markdown(f"""
-        <div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
-            <div style="flex: 1;">
-                <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Traffic MTD <span class="compare-date-str">{curr_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 32px;">{mtd_traffic:,.0f}</h2>
-            </div>
-            <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
-                <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_traffic:,.0f}</h2>
-                <span style="color: {c2_m}; font-weight: 600; background: {bg2_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_m} {abs(mom_traf_pct):.1f}% MoM</span>
-            </div>
-            <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
-                <p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p>
-                <h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_traffic:,.0f}</h2>
-                <span style="color: {c2_y}; font-weight: 600; background: {bg2_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_y} {abs(yoy_traf_pct):.1f}% YoY</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
+<div style="flex: 1;">
+<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Traffic MTD <span class="compare-date-str">{curr_str}</span></p>
+<h2 class="text-main" style="margin: 0; font-size: 32px;">{mtd_traffic:,.0f}</h2>
+</div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
+<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p>
+<h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_traffic:,.0f}</h2>
+<span style="color: {c2_m}; font-weight: 600; background: {bg2_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_m} {abs(mom_traf_pct):.1f}% MoM</span>
+</div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
+<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p>
+<h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_traffic:,.0f}</h2>
+<span style="color: {c2_y}; font-weight: 600; background: {bg2_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_y} {abs(yoy_traf_pct):.1f}% YoY</span>
+</div>
+</div>
+""", unsafe_allow_html=True)
 
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
@@ -384,24 +380,10 @@ try:
             start_d2, end_d2 = compare_dates
             filtered_cols_2 = [col for col, dt in date_mapping.items() if start_d2 <= dt <= end_d2]
         else: filtered_cols_2 = []
-        
-        # 为 GSC 数据创建过滤后的 Dataset
-        if date_col_gsc and not df_gsc.empty:
-            mask_g1 = (df_gsc[date_col_gsc] >= start_d1) & (df_gsc[date_col_gsc] <= end_d1)
-            df_gsc_1 = df_gsc[mask_g1].copy()
-            if enable_compare and len(compare_dates) == 2:
-                mask_g2 = (df_gsc[date_col_gsc] >= start_d2) & (df_gsc[date_col_gsc] <= end_d2)
-                df_gsc_2 = df_gsc[mask_g2].copy()
-            else:
-                df_gsc_2 = pd.DataFrame()
-        else:
-            df_gsc_1 = pd.DataFrame()
-            df_gsc_2 = pd.DataFrame()
 
         # ==========================================
         # 5. 区间漏斗与资产 (包含对比计算)
         # ==========================================
-        # -- Primary Data --
         int_traffic = get_sum(['seo流量', '流量'], filtered_cols_1)
         int_blog = get_sum(['seo blog 流量', 'blog流量'], filtered_cols_1)
         int_insite = get_sum(['seo 站内流量', '站内流量'], filtered_cols_1)
@@ -418,7 +400,6 @@ try:
 
         int_ga4_sales = get_sum(['ga4seo销售额', 'ga4销售额'], filtered_cols_1, True)
         int_super_sales = get_sum(['supersetseo销售额', 'seo销售额', 'superset'], filtered_cols_1, True)
-
         ai_sales = get_sum(['aiassistant销售额', 'ai销售额'], filtered_cols_1, True)
         ai_traffic = get_sum(['aiassistant流量', 'ai流量'], filtered_cols_1)
         google_index = get_latest('收录', filtered_cols_1)
@@ -441,10 +422,8 @@ try:
 
         comp_ga4_sales = get_sum(['ga4seo销售额', 'ga4销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
         comp_super_sales = get_sum(['supersetseo销售额', 'seo销售额', 'superset'], filtered_cols_2, True) if filtered_cols_2 else 0
-
         comp_ai_sales = get_sum(['aiassistant销售额', 'ai销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
         comp_ai_traffic = get_sum(['aiassistant流量', 'ai流量'], filtered_cols_2) if filtered_cols_2 else 0
-        
         comp_google_index = get_latest('收录', filtered_cols_2) if filtered_cols_2 else 0
         comp_google_backlinks = get_latest('外链', filtered_cols_2) if filtered_cols_2 else 0
         comp_google_domain = get_latest('外链域名广度', filtered_cols_2) if filtered_cols_2 else 0
@@ -470,109 +449,109 @@ try:
 
         # 漏斗
         st.markdown(f"""
-        <div class="soft-card">
-            <h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
-                <div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-filter"></i></div> Traffic Funnel Health
-            </h4>
-            <div style="display: flex; justify-content: space-between; border-bottom: 2px dashed #F0F1F6; padding-bottom: 24px; margin-bottom: 18px;">
-                <div class="funnel-item" style="padding-left: 0;">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p>
-                    <p class="funnel-value" style="margin: 0;">{int_traffic:,.0f}</p>
-                    {format_cmp(int_traffic, comp_traffic)}
-                </div>
-                <div class="funnel-item">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p>
-                    <p class="funnel-value" style="margin: 0;">{int_blog:,.0f}</p>
-                    {format_cmp(int_blog, comp_blog)}
-                </div>
-                <div class="funnel-item">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p>
-                    <p class="funnel-value" style="margin: 0;">{int_insite:,.0f}</p>
-                    {format_cmp(int_insite, comp_insite)}
-                </div>
-                <div class="funnel-item">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p>
-                    <p class="funnel-value" style="margin: 0;">{int_site_total:,.0f}</p>
-                    {format_cmp(int_site_total, comp_site_total)}
-                </div>
-                <div class="funnel-item">
-                    <p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p>
-                    <p class="funnel-value" style="margin: 0;">{int_bounce_rate:.2f}%</p>
-                    {format_cmp(int_bounce_rate, comp_bounce_rate, is_pct=True, inverse=True)}
-                </div>
-            </div>
-            <p class="text-muted" style="font-size: 12px; margin: 0;">✦ Real-time data mapped for Callie DE.</p>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="soft-card">
+<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
+<div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-filter"></i></div> Traffic Funnel Health
+</h4>
+<div style="display: flex; justify-content: space-between; border-bottom: 2px dashed #F0F1F6; padding-bottom: 24px; margin-bottom: 18px;">
+<div class="funnel-item" style="padding-left: 0;">
+<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p>
+<p class="funnel-value" style="margin: 0;">{int_traffic:,.0f}</p>
+{format_cmp(int_traffic, comp_traffic)}
+</div>
+<div class="funnel-item">
+<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p>
+<p class="funnel-value" style="margin: 0;">{int_blog:,.0f}</p>
+{format_cmp(int_blog, comp_blog)}
+</div>
+<div class="funnel-item">
+<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p>
+<p class="funnel-value" style="margin: 0;">{int_insite:,.0f}</p>
+{format_cmp(int_insite, comp_insite)}
+</div>
+<div class="funnel-item">
+<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p>
+<p class="funnel-value" style="margin: 0;">{int_site_total:,.0f}</p>
+{format_cmp(int_site_total, comp_site_total)}
+</div>
+<div class="funnel-item">
+<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p>
+<p class="funnel-value" style="margin: 0;">{int_bounce_rate:.2f}%</p>
+{format_cmp(int_bounce_rate, comp_bounce_rate, is_pct=True, inverse=True)}
+</div>
+</div>
+<p class="text-muted" style="font-size: 12px; margin: 0;">✦ Real-time data mapped for Callie DE.</p>
+</div>
+""", unsafe_allow_html=True)
         
         # 销售拆解
         st.markdown(f"""
-        <div class="soft-card">
-            <h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
-                <div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-sack-dollar"></i></div> Sales Breakdown (Selected Interval)
-            </h4>
-            <div style="display: flex; gap: 20px;">
-                <div class="inner-box box-deep" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-                    <p class="box-label" style="justify-content: center; margin-bottom: 8px; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales (Primary Source)</p>
-                    <p class="box-value-white" style="font-size: 36px; margin: 0;">$ {int_ga4_sales:,.2f}</p>
-                    {format_cmp(int_ga4_sales, comp_ga4_sales, is_curr=True, dark_bg=True)}
-                </div>
-                <div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-                    <p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p>
-                    <p class="box-value-dark" style="font-size: 36px; margin: 0;">$ {int_super_sales:,.2f}</p>
-                    {format_cmp(int_super_sales, comp_super_sales, is_curr=True)}
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="soft-card">
+<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
+<div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-sack-dollar"></i></div> Sales Breakdown (Selected Interval)
+</h4>
+<div style="display: flex; gap: 20px;">
+<div class="inner-box box-deep" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+<p class="box-label" style="justify-content: center; margin-bottom: 8px; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales (Primary Source)</p>
+<p class="box-value-white" style="font-size: 36px; margin: 0;">$ {int_ga4_sales:,.2f}</p>
+{format_cmp(int_ga4_sales, comp_ga4_sales, is_curr=True, dark_bg=True)}
+</div>
+<div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+<p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p>
+<p class="box-value-dark" style="font-size: 36px; margin: 0;">$ {int_super_sales:,.2f}</p>
+{format_cmp(int_super_sales, comp_super_sales, is_curr=True)}
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
         
         # 资产
         col_ai, col_google = st.columns(2)
         with col_ai:
             st.markdown(f"""
-            <div class="soft-card" style="height: 100%;">
-                <p class="asset-card-title"><div class="icon-small bg-purple flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-solid fa-robot"></i></div> AI Assistant</p>
-                <div style="display: flex; margin-top:24px;">
-                    <div class="inner-box box-deep">
-                        <p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p>
-                        <p class="box-value-white" style="margin: 0;">$ {ai_sales:,.2f}</p>
-                        {format_cmp(ai_sales, comp_ai_sales, is_curr=True, dark_bg=True)}
-                    </div>
-                    <div class="inner-box box-light">
-                        <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p>
-                        <p class="box-value-dark" style="margin: 0;">{ai_traffic:,.0f}</p>
-                        {format_cmp(ai_traffic, comp_ai_traffic)}
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+<div class="soft-card" style="height: 100%;">
+<p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-purple flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-solid fa-robot"></i></span> AI Assistant</p>
+<div style="display: flex; margin-top:16px;">
+<div class="inner-box box-deep">
+<p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p>
+<p class="box-value-white" style="margin: 0;">$ {ai_sales:,.2f}</p>
+{format_cmp(ai_sales, comp_ai_sales, is_curr=True, dark_bg=True)}
+</div>
+<div class="inner-box box-light">
+<p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p>
+<p class="box-value-dark" style="margin: 0;">{ai_traffic:,.0f}</p>
+{format_cmp(ai_traffic, comp_ai_traffic)}
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
             
         with col_google:
             st.markdown(f"""
-            <div class="soft-card" style="height: 100%;">
-                <p class="asset-card-title"><div class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></div> Google Assets</p>
-                <div style="display: flex; margin-top:24px;">
-                    <div class="inner-box box-light" style="flex: 1.2;">
-                        <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p>
-                        <p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>
-                        {format_cmp(google_index, comp_google_index)}
-                    </div>
-                    <div class="inner-box box-light">
-                        <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p>
-                        <p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>
-                        {format_cmp(google_backlinks, comp_google_backlinks)}
-                    </div>
-                    <div class="inner-box box-light">
-                        <p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p>
-                        <p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>
-                        {format_cmp(google_domain, comp_google_domain)}
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+<div class="soft-card" style="height: 100%;">
+<p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p>
+<div style="display: flex; margin-top:16px;">
+<div class="inner-box box-light" style="flex: 1.2;">
+<p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p>
+<p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>
+{format_cmp(google_index, comp_google_index)}
+</div>
+<div class="inner-box box-light">
+<p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p>
+<p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>
+{format_cmp(google_backlinks, comp_google_backlinks)}
+</div>
+<div class="inner-box box-light">
+<p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p>
+<p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>
+{format_cmp(google_domain, comp_google_domain)}
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 (支持 AI Assistant 选项)
+        # 6. 图表与明细 
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -624,9 +603,12 @@ try:
         if selected_sales_metrics:
             for metric in selected_sales_metrics:
                 color = sales_colors[metric]
-                if metric == 'GA4 SEO销售额': search_names = ['ga4seo销售额', 'ga4销售额']
-                elif metric == 'AI Assistant 销售额': search_names = ['aiassistant销售额', 'ai销售额', 'aiassistant']
-                else: search_names = ['supersetseo销售额', 'seo销售额', 'superset']
+                if metric == 'GA4 SEO销售额':
+                    search_names = ['ga4seo销售额', 'ga4销售额']
+                elif metric == 'AI Assistant 销售额':
+                    search_names = ['aiassistant销售额', 'ai销售额', 'aiassistant']
+                else:
+                    search_names = ['supersetseo销售额', 'seo销售额', 'superset']
                 
                 s_trend1 = get_trend_series(search_names, filtered_cols_1, True)
                 s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
@@ -674,27 +656,31 @@ try:
         st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
-        # 7. GSC Performance Breakdown (全新新增模块)
+        # 7. GSC Performance Breakdown (全新数据源集成)
         # ==========================================
         if date_col_gsc and not df_gsc.empty:
             st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-orange"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">GSC Performance Breakdown</h3></div>', unsafe_allow_html=True)
             st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
             
+            # 创建 6 个核心标签页
             gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_tabs = st.tabs(gsc_segments)
             cols_list = list(df_gsc.columns)
             
+            # 使用上面全局选定的 Primary 日期过滤 GSC 数据
+            mask_g1 = (df_gsc[date_col_gsc] >= start_d1) & (df_gsc[date_col_gsc] <= end_d1)
+            df_gsc_1 = df_gsc[mask_g1].copy()
+            
             for i, tab in enumerate(gsc_tabs):
                 with tab:
-                    # 智能列名映射：基于标准列分布 (第0列是日期，每4列一组)
+                    # 每 4 列为一组 (0是日期, 1-4为第一组)
                     base_idx = 1 + i * 4
                     c_clk = cols_list[base_idx] if base_idx < len(cols_list) else cols_list[-1]
                     c_imp = cols_list[base_idx+1] if base_idx+1 < len(cols_list) else cols_list[-1]
                     c_ctr = cols_list[base_idx+2] if base_idx+2 < len(cols_list) else cols_list[-1]
                     c_pos = cols_list[base_idx+3] if base_idx+3 < len(cols_list) else cols_list[-1]
                     
-                    # 提供容错的手动映射面板
-                    with st.expander(f"⚙️ 数据列映射 (如上方图表无数据，请点此手动指定列)"):
+                    with st.expander("⚙️ 数据列校准 (如上方图表无数据或对应错误，请点此手动指定列)"):
                         c1, c2, c3, c4 = st.columns(4)
                         with c1: c_clk = st.selectbox("点击次数 (Clicks)", cols_list, index=cols_list.index(c_clk), key=f"clk_{i}")
                         with c2: c_imp = st.selectbox("展示 (Impressions)", cols_list, index=cols_list.index(c_imp), key=f"imp_{i}")
@@ -706,38 +692,38 @@ try:
                         
                         def clean_gsc(s):
                             if pd.isna(s): return 0
-                            return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+                            val = str(s).replace(',', '').replace('%', '')
+                            return pd.to_numeric(val, errors='coerce')
                             
-                        # 获取 Primary 数据
                         y_clk1 = df_gsc_1[c_clk].apply(clean_gsc).fillna(0).tolist()
                         y_imp1 = df_gsc_1[c_imp].apply(clean_gsc).fillna(0).tolist()
                         y_ctr1 = df_gsc_1[c_ctr].apply(clean_gsc).fillna(0).tolist()
                         y_pos1 = df_gsc_1[c_pos].apply(clean_gsc).fillna(0).tolist()
                         
-                        # 图 1：点击 (柱状) + 展示 (折线)
+                        # Graph 1: 点击次数与展示
                         fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
-                        fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数 (Clicks)", marker_color='#42D2E6', opacity=0.8), secondary_y=False)
-                        fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines', name="展示 (Impressions)", line=dict(color='#8B5CF6', width=2)), secondary_y=True)
-                        fig_g1.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.02, x=1, xanchor="right"))
+                        fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数", marker_color='#42D2E6', opacity=0.8), secondary_y=False)
+                        fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines', name="展示", line=dict(color='#8B5CF6', width=2)), secondary_y=True)
+                        fig_g1.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
                         fig_g1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g1, use_container_width=True)
                         
-                        # 图 2：点击率 (折线) + 排名 (折线反转)
+                        # Graph 2: 点击率与排名 (自动倒序)
                         fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
-                        fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines', name="点击率 (CTR %)", line=dict(color='#22C55E', width=2)), secondary_y=False)
-                        fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines', name="排名 (Position, 越小越好)", line=dict(color='#FF6475', width=2, dash='dot')), secondary_y=True)
-                        fig_g2.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.02, x=1, xanchor="right"))
-                        fig_g2.update_yaxes(autorange="reversed", secondary_y=True) # 排名自动反转 (1在上)
+                        fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines', name="点击率 (%)", line=dict(color='#22C55E', width=2)), secondary_y=False)
+                        fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines', name="排名", line=dict(color='#FF6475', width=2, dash='dot')), secondary_y=True)
+                        fig_g2.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
+                        fig_g2.update_yaxes(autorange="reversed", secondary_y=True) 
                         fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g2, use_container_width=True)
                     else:
-                        st.info("该时间区间内没有 GSC 数据。")
+                        st.info("所选时间段暂无 GSC 数据。")
             st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
-        # 8. Raw Tables (展示所有底层原生数据)
+        # 8. Raw Tables (底层数据透视)
         # ==========================================
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
         
@@ -750,8 +736,9 @@ try:
         st.markdown('</div>', unsafe_allow_html=True)
         
         if date_col_gsc and not df_gsc.empty:
-            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (GSC 点击量)</h3></div>', unsafe_allow_html=True)
+            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (GSC 点击量)</h3></div>', unsafe_allow_html=True)
             st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
+            # 在底部表格展示被选定日期过滤后的 GSC 原始数据
             st.dataframe(df_gsc_1, use_container_width=True, height=350)
             st.markdown('</div>', unsafe_allow_html=True)
 
