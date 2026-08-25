@@ -45,7 +45,6 @@ st.markdown("""
     }
     .soft-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.12), 0 10px 15px -5px rgba(15, 23, 42, 0.08); }
     
-    /* 🇩🇪 德国专属定制：黑 -> 深红 -> 质感金 的高级渐变 */
     .welcome-banner {
         background: linear-gradient(135deg, #1A1A24 0%, #9B1B30 65%, #D4AF37 100%); 
         border-radius: 28px; padding: 32px 40px; color: white; margin-bottom: 30px; 
@@ -94,7 +93,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. Data Loader & Smart Matching 
+# 1. Data Loader & Smart Matching
 # ==========================================
 @st.cache_data(ttl=300)
 def load_and_clean_data():
@@ -120,18 +119,14 @@ def load_and_clean_data():
     df_de['Metric_Norm'] = df_de['Metric'].str.replace(' ', '', regex=False).str.lower()
     df_de = df_de[df_de['Metric'].notna() & (df_de['Metric'] != '') & (df_de['Metric'].str.lower() != 'nan')]
     cols_to_keep = [c for c in df_de.columns if "空列_" not in c]
-    
     return df_de[cols_to_keep]
 
 @st.cache_data(ttl=300)
 def load_gsc_data():
-    # 读取 GSC，智能融合双表头，解决 Unnamed 合并单元格问题
     gsc_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdRQFVxjh71cKOiUdcf-j5Ob2GQzc_1WidEtXXx1tdc9Qjz5bWgzJtSEDbMU86i_4ATkmNV8rPITg1/pub?gid=0&single=true&output=csv"
     bust_url = f"{gsc_url}&_t={int(datetime.now().timestamp())}"
-    
     df_raw = pd.read_csv(bust_url, header=None)
     
-    # 提取第一行并向下填充合并单元格 (如: 点击（GSC）向后填充)
     row0 = df_raw.iloc[0].ffill()
     row1 = df_raw.iloc[1]
     
@@ -142,7 +137,7 @@ def load_gsc_data():
         if '日' in m_str or 'date' in m_str.lower() or pd.isna(c) or c_str == 'nan':
             new_cols.append(m_str)
         else:
-            new_cols.append(f"{c_str}_{m_str}") # 生成诸如: 点击（GSC）_点击次数
+            new_cols.append(f"{c_str}_{m_str}")
             
     df = df_raw.iloc[2:].copy()
     df.columns = new_cols
@@ -156,31 +151,58 @@ def load_gsc_data():
     if date_col:
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
         df = df.dropna(subset=[date_col]).sort_values(date_col)
-        
+    return df, date_col
+
+@st.cache_data(ttl=300)
+def load_ai_perf_data():
+    ai_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRdK5Va7wCzGJ3ysGE8H3oeCWjjGEVLZud1Y31ghdO68zLgrOfkfwLnh3VU_lhZttlUziSG4f7ZRTLU/pub?output=csv"
+    bust_url = f"{ai_url}&_t={int(datetime.now().timestamp())}"
+    df_raw = pd.read_csv(bust_url, header=None)
+    
+    row0 = df_raw.iloc[0].ffill()
+    row1 = df_raw.iloc[1]
+    
+    new_cols = []
+    for c, m in zip(row0, row1):
+        c_str = str(c).strip()
+        m_str = str(m).strip()
+        if '日' in m_str or 'date' in m_str.lower() or pd.isna(c) or c_str == 'nan':
+            new_cols.append(m_str)
+        else:
+            new_cols.append(f"{c_str}_{m_str}")
+            
+    df = df_raw.iloc[2:].copy()
+    df.columns = new_cols
+    
+    date_col = None
+    for col in df.columns:
+        if '日' in str(col) or 'date' in str(col).lower():
+            date_col = col
+            break
+            
+    if date_col:
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
+        df = df.dropna(subset=[date_col]).sort_values(date_col)
     return df, date_col
 
 try:
     with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
         df_de = load_and_clean_data()
-        try:
-            df_gsc, date_col_gsc = load_gsc_data()
-        except Exception:
-            df_gsc, date_col_gsc = pd.DataFrame(), None
+        try: df_gsc, date_col_gsc = load_gsc_data()
+        except Exception: df_gsc, date_col_gsc = pd.DataFrame(), None
+        try: df_ai, date_col_ai = load_ai_perf_data()
+        except Exception: df_ai, date_col_ai = pd.DataFrame(), None
 
         # ==========================================
         # ⭐ T-2 GA 数据延迟基准日逻辑
         # ==========================================
         real_today = datetime.now().date()
-        data_date = real_today - timedelta(days=2)  # MTD 记录时间延后2天
+        data_date = real_today - timedelta(days=2)
         current_year, current_month = data_date.year, data_date.month
 
-        # Welcome Banner (强制左对齐，去除所有空格，杜绝 HTML 崩溃)
         st.markdown(f"""
 <div class="welcome-banner">
-<h1>
-<img src="https://flagcdn.com/w80/de.png" style="height: 36px; margin-right: 16px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);" alt="Germany Flag">
-Hallo, Callie DE Team!
-</h1>
+<h1><img src="https://flagcdn.com/w80/de.png" style="height: 36px; margin-right: 16px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);" alt="Germany Flag">Hallo, Callie DE Team!</h1>
 <p>Germany (DE) SEO Global Dashboard • Data Date: {data_date.strftime('%Y-%m-%d')} (T-2 GA Delay)</p>
 </div>
 """, unsafe_allow_html=True)
@@ -190,11 +212,10 @@ Hallo, Callie DE Team!
             if st.button("🔄 Sync Data"):
                 load_and_clean_data.clear()
                 load_gsc_data.clear()
+                load_ai_perf_data.clear()
                 st.rerun()
-        with col_target1:
-            target_sales = st.number_input("🎯 DE Sales Target ($)", value=7500.0, step=500.0)
-        with col_target2:
-            target_traffic = st.number_input("⚡ DE Traffic Target", value=20000.0, step=1000.0)
+        with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=7500.0, step=500.0)
+        with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=20000.0, step=1000.0)
                 
         # ==========================================
         # 2. 日期匹配与强力清洗查表函数
@@ -202,13 +223,10 @@ Hallo, Callie DE Team!
         date_mapping = {}
         for col in df_de.columns:
             if col not in ['Metric', 'Metric_Norm']:
-                try:
-                    dt = pd.to_datetime(col).date()
-                    date_mapping[col] = dt
+                try: date_mapping[col] = pd.to_datetime(col).date()
                 except: pass
         
         mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
-
         lm_year = current_year if current_month > 1 else current_year - 1
         lm_month = current_month - 1 if current_month > 1 else 12
         lm_day = min(data_date.day, calendar.monthrange(lm_year, lm_month)[1])
@@ -235,7 +253,6 @@ Hallo, Callie DE Team!
                 if not matched.empty:
                     data = matched
                     break
-                    
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -275,9 +292,7 @@ Hallo, Callie DE Team!
         gap_sales = max(0, target_sales - mtd_sales)
         gap_traffic = max(0, target_traffic - mtd_traffic)
 
-        # 3.1 Target Achievement
         st.markdown('<div class="flex-center" style="margin:20px 0;"><div class="icon-square bg-orange"><i class="fa-solid fa-bullseye"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Target Achievement (Monat)</h3></div>', unsafe_allow_html=True)
-        
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
@@ -290,16 +305,10 @@ Hallo, Callie DE Team!
 <span class="text-main" style="font-size: 38px; font-weight: 700;">$ {mtd_sales:,.2f}</span>
 <span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ $ {target_sales:,.2f}</span>
 </div>
-<div class="progress-track">
-<div class="progress-fill-red" style="width: {prog_sales*100}%;"></div>
-<span class="rocket-icon">🎯</span>
-</div>
-<div style="text-align: right; margin-top: 16px;">
-<span style="color: #FF6475; font-weight: 800; font-size: 18px;">{prog_sales*100:.1f}%</span>
-</div>
+<div class="progress-track"><div class="progress-fill-red" style="width: {prog_sales*100}%;"></div><span class="rocket-icon">🎯</span></div>
+<div style="text-align: right; margin-top: 16px;"><span style="color: #FF6475; font-weight: 800; font-size: 18px;">{prog_sales*100:.1f}%</span></div>
 </div>
 """, unsafe_allow_html=True)
-            
         with col2:
             st.markdown(f"""
 <div class="soft-card">
@@ -311,17 +320,11 @@ Hallo, Callie DE Team!
 <span class="text-main" style="font-size: 38px; font-weight: 700;">{mtd_traffic:,.0f}</span>
 <span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ {target_traffic:,.0f}</span>
 </div>
-<div class="progress-track">
-<div class="progress-fill-blue" style="width: {prog_traffic*100}%;"></div>
-<span class="rocket-icon">⚡</span>
-</div>
-<div style="text-align: right; margin-top: 16px;">
-<span style="color: #42D2E6; font-weight: 800; font-size: 18px;">{prog_traffic*100:.1f}%</span>
-</div>
+<div class="progress-track"><div class="progress-fill-blue" style="width: {prog_traffic*100}%;"></div><span class="rocket-icon">⚡</span></div>
+<div style="text-align: right; margin-top: 16px;"><span style="color: #42D2E6; font-weight: 800; font-size: 18px;">{prog_traffic*100:.1f}%</span></div>
 </div>
 """, unsafe_allow_html=True)
 
-        # 3.2 MTD 同环比计算
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-chart-simple"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">MTD Monitoring</h3></div>', unsafe_allow_html=True)
         def get_trend_ui(pct): return ("#FF6475" if pct < 0 else "#22C55E", "#FFF0F2" if pct < 0 else "#F0FDF4", "↓" if pct < 0 else "↑")
 
@@ -332,20 +335,9 @@ Hallo, Callie DE Team!
 
         st.markdown(f"""
 <div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
-<div style="flex: 1;">
-<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Sales MTD (GA4) <span class="compare-date-str">{curr_str}</span></p>
-<h2 class="text-main" style="margin: 0; font-size: 32px;">$ {mtd_sales:,.2f}</h2>
-</div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
-<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p>
-<h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {lm_sales:,.2f}</h2>
-<span style="color: {c1_m}; font-weight: 600; background: {bg1_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_m} {abs(mom_sales_pct):.1f}% MoM</span>
-</div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
-<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p>
-<h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {ly_sales:,.2f}</h2>
-<span style="color: {c1_y}; font-weight: 600; background: {bg1_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_y} {abs(yoy_sales_pct):.1f}% YoY</span>
-</div>
+<div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Sales MTD (GA4) <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">$ {mtd_sales:,.2f}</h2></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {lm_sales:,.2f}</h2><span style="color: {c1_m}; font-weight: 600; background: {bg1_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_m} {abs(mom_sales_pct):.1f}% MoM</span></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {ly_sales:,.2f}</h2><span style="color: {c1_y}; font-weight: 600; background: {bg1_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_y} {abs(yoy_sales_pct):.1f}% YoY</span></div>
 </div>
 """, unsafe_allow_html=True)
         
@@ -356,20 +348,9 @@ Hallo, Callie DE Team!
 
         st.markdown(f"""
 <div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
-<div style="flex: 1;">
-<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Traffic MTD <span class="compare-date-str">{curr_str}</span></p>
-<h2 class="text-main" style="margin: 0; font-size: 32px;">{mtd_traffic:,.0f}</h2>
-</div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
-<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p>
-<h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_traffic:,.0f}</h2>
-<span style="color: {c2_m}; font-weight: 600; background: {bg2_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_m} {abs(mom_traf_pct):.1f}% MoM</span>
-</div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;">
-<p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p>
-<h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_traffic:,.0f}</h2>
-<span style="color: {c2_y}; font-weight: 600; background: {bg2_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_y} {abs(yoy_traf_pct):.1f}% YoY</span>
-</div>
+<div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Traffic MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">{mtd_traffic:,.0f}</h2></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_traffic:,.0f}</h2><span style="color: {c2_m}; font-weight: 600; background: {bg2_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_m} {abs(mom_traf_pct):.1f}% MoM</span></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_traffic:,.0f}</h2><span style="color: {c2_y}; font-weight: 600; background: {bg2_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_y} {abs(yoy_traf_pct):.1f}% YoY</span></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -428,7 +409,6 @@ Hallo, Callie DE Team!
         google_backlinks = get_latest('外链', filtered_cols_1)
         google_domain = get_latest('外链域名广度', filtered_cols_1)
 
-        # -- Compare Data --
         comp_traffic = get_sum(['seo流量', '流量'], filtered_cols_2) if filtered_cols_2 else 0
         comp_blog = get_sum(['seo blog 流量', 'blog流量'], filtered_cols_2) if filtered_cols_2 else 0
         comp_insite = get_sum(['seo 站内流量', '站内流量'], filtered_cols_2) if filtered_cols_2 else 0
@@ -450,100 +430,52 @@ Hallo, Callie DE Team!
         comp_google_backlinks = get_latest('外链', filtered_cols_2) if filtered_cols_2 else 0
         comp_google_domain = get_latest('外链域名广度', filtered_cols_2) if filtered_cols_2 else 0
 
-        # ⭐ 自动格式化对比引擎
         def format_cmp(v1, v2, is_curr=False, is_pct=False, inverse=False, dark_bg=False):
             if not enable_compare: return ""
             if v2 == 0 and v1 > 0: pct = 999999
             elif v2 == 0 and v1 == 0: pct = 0
             else: pct = ((v1 - v2) / v2) * 100
-            
             v2_str = f"$ {v2:,.2f}" if is_curr else (f"{v2:.2f}%" if is_pct else f"{v2:,.0f}")
-            
-            if pct == 0:
-                c, arr, p_str = "#8E8CA7", "", "0.0%"
+            if pct == 0: c, arr, p_str = "#8E8CA7", "", "0.0%"
             else:
                 c = "#22C55E" if (pct > 0 and not inverse) or (pct < 0 and inverse) else "#FF6475"
                 arr = "↑" if pct > 0 else "↓"
                 p_str = f"{abs(pct):.1f}%" if pct != 999999 else "+∞%"
-                
             vs_c = "rgba(255,255,255,0.7)" if dark_bg else "#8E8CA7"
             return f"<div style='font-size:13px; color:{vs_c}; font-weight:500; margin-top:4px;'>vs {v2_str} <span style='color:{c}; font-weight:700; margin-left:4px;'>{arr} {p_str}</span></div>"
 
-        # 漏斗
         st.markdown(f"""
 <div class="soft-card">
-<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
-<div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-filter"></i></div> Traffic Funnel Health
-</h4>
+<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;"><div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-filter"></i></div> Traffic Funnel Health</h4>
 <div style="display: flex; justify-content: space-between; border-bottom: 2px dashed #F0F1F6; padding-bottom: 24px; margin-bottom: 18px;">
-<div class="funnel-item" style="padding-left: 0;">
-<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p>
-<p class="funnel-value" style="margin: 0;">{int_traffic:,.0f}</p>
-{format_cmp(int_traffic, comp_traffic)}
-</div>
-<div class="funnel-item">
-<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p>
-<p class="funnel-value" style="margin: 0;">{int_blog:,.0f}</p>
-{format_cmp(int_blog, comp_blog)}
-</div>
-<div class="funnel-item">
-<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p>
-<p class="funnel-value" style="margin: 0;">{int_insite:,.0f}</p>
-{format_cmp(int_insite, comp_insite)}
-</div>
-<div class="funnel-item">
-<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p>
-<p class="funnel-value" style="margin: 0;">{int_site_total:,.0f}</p>
-{format_cmp(int_site_total, comp_site_total)}
-</div>
-<div class="funnel-item">
-<p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p>
-<p class="funnel-value" style="margin: 0;">{int_bounce_rate:.2f}%</p>
-{format_cmp(int_bounce_rate, comp_bounce_rate, is_pct=True, inverse=True)}
-</div>
+<div class="funnel-item" style="padding-left: 0;"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p><p class="funnel-value" style="margin: 0;">{int_traffic:,.0f}</p>{format_cmp(int_traffic, comp_traffic)}</div>
+<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p><p class="funnel-value" style="margin: 0;">{int_blog:,.0f}</p>{format_cmp(int_blog, comp_blog)}</div>
+<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p><p class="funnel-value" style="margin: 0;">{int_insite:,.0f}</p>{format_cmp(int_insite, comp_insite)}</div>
+<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p><p class="funnel-value" style="margin: 0;">{int_site_total:,.0f}</p>{format_cmp(int_site_total, comp_site_total)}</div>
+<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p><p class="funnel-value" style="margin: 0;">{int_bounce_rate:.2f}%</p>{format_cmp(int_bounce_rate, comp_bounce_rate, is_pct=True, inverse=True)}</div>
 </div>
 <p class="text-muted" style="font-size: 12px; margin: 0;">✦ Real-time data mapped for Callie DE.</p>
 </div>
 """, unsafe_allow_html=True)
         
-        # 销售拆解
         st.markdown(f"""
 <div class="soft-card">
-<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;">
-<div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-sack-dollar"></i></div> Sales Breakdown (Selected Interval)
-</h4>
+<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;"><div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-sack-dollar"></i></div> Sales Breakdown (Selected Interval)</h4>
 <div style="display: flex; gap: 20px;">
-<div class="inner-box box-deep" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-<p class="box-label" style="justify-content: center; margin-bottom: 8px; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales (Primary Source)</p>
-<p class="box-value-white" style="font-size: 36px; margin: 0;">$ {int_ga4_sales:,.2f}</p>
-{format_cmp(int_ga4_sales, comp_ga4_sales, is_curr=True, dark_bg=True)}
-</div>
-<div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-<p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p>
-<p class="box-value-dark" style="font-size: 36px; margin: 0;">$ {int_super_sales:,.2f}</p>
-{format_cmp(int_super_sales, comp_super_sales, is_curr=True)}
-</div>
+<div class="inner-box box-deep" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;"><p class="box-label" style="justify-content: center; margin-bottom: 8px; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales (Primary Source)</p><p class="box-value-white" style="font-size: 36px; margin: 0;">$ {int_ga4_sales:,.2f}</p>{format_cmp(int_ga4_sales, comp_ga4_sales, is_curr=True, dark_bg=True)}</div>
+<div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;"><p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p><p class="box-value-dark" style="font-size: 36px; margin: 0;">$ {int_super_sales:,.2f}</p>{format_cmp(int_super_sales, comp_super_sales, is_curr=True)}</div>
 </div>
 </div>
 """, unsafe_allow_html=True)
         
-        # 资产
         col_ai, col_google = st.columns(2)
         with col_ai:
             st.markdown(f"""
 <div class="soft-card" style="height: 100%;">
 <p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-purple flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-solid fa-robot"></i></span> AI Assistant</p>
 <div style="display: flex; margin-top:16px;">
-<div class="inner-box box-deep">
-<p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p>
-<p class="box-value-white" style="margin: 0;">$ {ai_sales:,.2f}</p>
-{format_cmp(ai_sales, comp_ai_sales, is_curr=True, dark_bg=True)}
-</div>
-<div class="inner-box box-light">
-<p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p>
-<p class="box-value-dark" style="margin: 0;">{ai_traffic:,.0f}</p>
-{format_cmp(ai_traffic, comp_ai_traffic)}
-</div>
+<div class="inner-box box-deep"><p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p><p class="box-value-white" style="margin: 0;">$ {ai_sales:,.2f}</p>{format_cmp(ai_sales, comp_ai_sales, is_curr=True, dark_bg=True)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p><p class="box-value-dark" style="margin: 0;">{ai_traffic:,.0f}</p>{format_cmp(ai_traffic, comp_ai_traffic)}</div>
 </div>
 </div>
 """, unsafe_allow_html=True)
@@ -553,21 +485,9 @@ Hallo, Callie DE Team!
 <div class="soft-card" style="height: 100%;">
 <p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p>
 <div style="display: flex; margin-top:16px;">
-<div class="inner-box box-light" style="flex: 1.2;">
-<p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p>
-<p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>
-{format_cmp(google_index, comp_google_index)}
-</div>
-<div class="inner-box box-light">
-<p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p>
-<p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>
-{format_cmp(google_backlinks, comp_google_backlinks)}
-</div>
-<div class="inner-box box-light">
-<p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p>
-<p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>
-{format_cmp(google_domain, comp_google_domain)}
-</div>
+<div class="inner-box box-light" style="flex: 1.2;"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p><p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>{format_cmp(google_index, comp_google_index)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>{format_cmp(google_backlinks, comp_google_backlinks)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>{format_cmp(google_domain, comp_google_domain)}</div>
 </div>
 </div>
 """, unsafe_allow_html=True)
@@ -598,20 +518,10 @@ Hallo, Callie DE Team!
             return []
 
         sales_metrics_options = ['GA4 SEO销售额', 'Superset SEO销售额', 'AI Assistant 销售额']
-        sales_colors = {
-            'GA4 SEO销售额': '#FF6475', 
-            'Superset SEO销售额': '#FFB000',
-            'AI Assistant 销售额': '#8B5CF6'
-        }
+        sales_colors = {'GA4 SEO销售额': '#FF6475', 'Superset SEO销售额': '#FFB000', 'AI Assistant 销售额': '#8B5CF6'}
 
         traffic_metrics_options = ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量', 'AI Assistant 流量']
-        traffic_colors = {
-            'SEO流量': '#2D235C', 
-            'SEO Blog 流量': '#42D2E6', 
-            'SEO 站内流量': '#FF6475', 
-            '网站总流量': '#FFB000',
-            'AI Assistant 流量': '#8B5CF6'
-        }
+        traffic_colors = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000', 'AI Assistant 流量': '#8B5CF6'}
         
         font_style = dict(family="Poppins, sans-serif", color="#8E8CA7")
         dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
@@ -625,12 +535,9 @@ Hallo, Callie DE Team!
         if selected_sales_metrics:
             for metric in selected_sales_metrics:
                 color = sales_colors[metric]
-                if metric == 'GA4 SEO销售额':
-                    search_names = ['ga4seo销售额', 'ga4销售额']
-                elif metric == 'AI Assistant 销售额':
-                    search_names = ['aiassistant销售额', 'ai销售额', 'aiassistant']
-                else:
-                    search_names = ['supersetseo销售额', 'seo销售额', 'superset']
+                if metric == 'GA4 SEO销售额': search_names = ['ga4seo销售额', 'ga4销售额']
+                elif metric == 'AI Assistant 销售额': search_names = ['aiassistant销售额', 'ai销售额', 'aiassistant']
+                else: search_names = ['supersetseo销售额', 'seo销售额', 'superset']
                 
                 s_trend1 = get_trend_series(search_names, filtered_cols_1, True)
                 s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
@@ -683,7 +590,6 @@ Hallo, Callie DE Team!
         if date_col_gsc and not df_gsc.empty:
             st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-orange"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">GSC Performance Breakdown</h3></div>', unsafe_allow_html=True)
             
-            # GSC 专属独立时间控制台
             col_gd1, col_gchk, col_gd2 = st.columns([1.5, 1, 1.5])
             with col_gd1:
                 gsc_dates = st.date_input("🗓️ Primary Date Range (GSC)", [min_date, max_date], key="gsc_d1")
@@ -725,7 +631,6 @@ Hallo, Callie DE Team!
                     c_ctr = f"{seg}_点击率"
                     c_pos = f"{seg}_排名"
                     
-                    # 提供下拉框用于防止列名更改导致报错
                     avail_cols = list(df_gsc.columns)
                     if c_clk not in avail_cols: c_clk = avail_cols[1] if len(avail_cols)>1 else avail_cols[-1]
                     if c_imp not in avail_cols: c_imp = avail_cols[2] if len(avail_cols)>2 else avail_cols[-1]
@@ -750,7 +655,6 @@ Hallo, Callie DE Team!
                         y_ctr2 = df_gsc_2[c_ctr].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
                         y_pos2 = df_gsc_2[c_pos].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
 
-                        # 图表 1: 点击次数与展示
                         fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
                         if not enable_gsc_cmp:
                             fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数", marker_color='#42D2E6', opacity=0.8), secondary_y=False)
@@ -767,8 +671,7 @@ Hallo, Callie DE Team!
                         fig_g1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g1, use_container_width=True)
-
-                        # 图表 2: 点击率与排名 (自动倒序)
+                        
                         fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
                         if not enable_gsc_cmp:
                             fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines', name="点击率 (%)", line=dict(color='#22C55E', width=2)), secondary_y=False)
@@ -780,7 +683,7 @@ Hallo, Callie DE Team!
                             fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos2)], y=y_pos2, mode='lines', name="排名 (Cmp)", line=dict(color='#FF6475', width=2, dash='dash')), secondary_y=True)
 
                         fig_g2.update_layout(height=280, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
-                        fig_g2.update_yaxes(autorange="reversed", secondary_y=True) # 排名自动反转刻度
+                        fig_g2.update_yaxes(autorange="reversed", secondary_y=True) 
                         fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g2, use_container_width=True)
@@ -789,7 +692,72 @@ Hallo, Callie DE Team!
             st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
-        # 8. Raw Tables (展示所有底层原生数据)
+        # 8. AI Performance Breakdown (全新 AI 专属模块)
+        # ==========================================
+        if date_col_ai and not df_ai.empty:
+            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-microchip"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">AI Performance Breakdown</h3></div>', unsafe_allow_html=True)
+            
+            # AI 专属独立时间控制台
+            col_ad1, col_achk, col_ad2 = st.columns([1.5, 1, 1.5])
+            with col_ad1:
+                ai_dates = st.date_input("🗓️ Primary Date Range (AI)", [min_date, max_date], key="ai_d1")
+            with col_achk:
+                st.markdown('<div style="margin-top:28px;"></div>', unsafe_allow_html=True)
+                enable_ai_cmp = st.checkbox("☑️ Enable AI Comparison", key="ai_cmp_chk")
+            with col_ad2:
+                if enable_ai_cmp:
+                    ai_comp_dates = st.date_input("🗓️ Compare Date Range (AI)", [min_date - timedelta(days=30), max_date - timedelta(days=30)], key="ai_d2")
+                else:
+                    ai_comp_dates = []
+
+            if len(ai_dates) == 2: as_start, as_end = ai_dates
+            else: as_start = as_end = ai_dates[0]
+            
+            mask_a1 = (df_ai[date_col_ai] >= as_start) & (df_ai[date_col_ai] <= as_end)
+            df_ai_1 = df_ai[mask_a1].copy()
+            dates_a1 = df_ai_1[date_col_ai].astype(str).tolist()
+
+            df_ai_2 = pd.DataFrame()
+            if enable_ai_cmp and len(ai_comp_dates) == 2:
+                ac_start, ac_end = ai_comp_dates
+                mask_a2 = (df_ai[date_col_ai] >= ac_start) & (df_ai[date_col_ai] <= ac_end)
+                df_ai_2 = df_ai[mask_a2].copy()
+
+            st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
+            
+            ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
+            selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
+            
+            fig_ai = go.Figure()
+            if selected_ai_metrics and not df_ai_1.empty:
+                colors = ['#8B5CF6', '#42D2E6', '#FF6475', '#FFB000', '#22C55E']
+                for idx, metric in enumerate(selected_ai_metrics):
+                    c_color = colors[idx % len(colors)]
+                    
+                    def clean_ai(s):
+                        if pd.isna(s): return 0
+                        return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+                    
+                    y_ai1 = df_ai_1[metric].apply(clean_ai).fillna(0).tolist()
+                    y_ai2 = df_ai_2[metric].apply(clean_ai).fillna(0).tolist() if not df_ai_2.empty else []
+                    
+                    if not enable_ai_cmp:
+                        fig_ai.add_trace(go.Scatter(x=dates_a1, y=y_ai1, mode='lines', name=metric, line=dict(color=c_color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
+                    else:
+                        max_len = max(len(y_ai1), len(y_ai2))
+                        x_axis = [f"Day {j+1}" for j in range(max_len)]
+                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai1)], y=y_ai1, mode='lines', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline')))
+                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai2)], y=y_ai2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=c_color, width=3, dash='dash', shape='spline')))
+                
+                fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
+                st.plotly_chart(fig_ai, use_container_width=True)
+            elif df_ai_1.empty:
+                st.info("所选时间段暂无 AI Performance 数据。")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+
+        # ==========================================
+        # 9. Raw Tables (展示所有底层原生数据)
         # ==========================================
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
         
@@ -805,6 +773,12 @@ Hallo, Callie DE Team!
             st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (GSC)</h3></div>', unsafe_allow_html=True)
             st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
             st.dataframe(df_gsc_1, use_container_width=True, height=350)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        if date_col_ai and not df_ai.empty:
+            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-microchip"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (AI Performance)</h3></div>', unsafe_allow_html=True)
+            st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
+            st.dataframe(df_ai_1, use_container_width=True, height=350)
             st.markdown('</div>', unsafe_allow_html=True)
 
 except Exception as e:
