@@ -248,14 +248,12 @@ try:
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
-            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
-                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -263,7 +261,6 @@ try:
                     if not matched.empty:
                         data = matched
                         break
-                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -499,14 +496,14 @@ try:
 <p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p>
 <div style="display: flex; margin-top:16px;">
 <div class="inner-box box-light" style="flex: 1.2;"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p><p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>{format_cmp(google_index, comp_google_index)}</div>
-<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>{format_cmp(google_backlinks, comp_google_backlinks)}</div>
-<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>{format_cmp(google_domain, comp_google_domain)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark">{google_backlinks:,.0f}</p>{format_cmp(google_backlinks, comp_google_backlinks)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark">{google_domain:,.0f}</p>{format_cmp(google_domain, comp_google_domain)}</div>
 </div>
 </div>
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 
+        # 6. 图表与明细
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -541,7 +538,7 @@ try:
         dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
         dates2 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_2] if filtered_cols_2 else []
         
-        # Sales Chart (使用统一的白色标题栏)
+        # Sales Chart
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -576,7 +573,7 @@ try:
         fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"))
         st.plotly_chart(fig_sales, use_container_width=True)
         
-        # Traffic Chart (使用统一的白色标题栏)
+        # Traffic Chart
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;">
     <div class="flex-center">
@@ -593,7 +590,6 @@ try:
         if selected_traffic_metrics:
             for metric in selected_traffic_metrics:
                 color = traffic_colors[metric]
-                search_names = [metric.replace(' ', '').lower()]
                 if metric == 'SEO Blog 流量': search_names = ['seoblog流量']
                 elif metric == 'SEO 站内流量': search_names = ['seo站内流量']
                 elif metric == '网站总流量': search_names = ['网站总流量']
@@ -618,7 +614,6 @@ try:
         # 7. GSC Performance Breakdown 
         # ==========================================
         if date_col_gsc and not df_gsc.empty:
-            # GSC Header (使用统一的白色标题栏)
             st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -733,7 +728,6 @@ try:
         # 8. AI Performance Breakdown
         # ==========================================
         if date_col_ai and not df_ai.empty:
-            # AI Header (使用统一的白色标题栏)
             st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -800,9 +794,8 @@ try:
                 st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
-        # 9. Custom Comparison Table
+        # 9. Custom Comparison Table (手动录入 + 自动渲染)
         # ==========================================
-        # Table Header (统一白色标题栏)
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -833,54 +826,34 @@ try:
         if len(t_dates_2) == 2: t2_start, t2_end = t_dates_2
         else: t2_start = t2_end = t_dates_2[0]
 
-        t1_cols_de = [col for col, dt in date_mapping.items() if t1_start <= dt <= t1_end]
-        t2_cols_de = [col for col, dt in date_mapping.items() if t2_start <= dt <= t2_end]
-        
-        df_gsc_t1 = df_gsc[(df_gsc[date_col_gsc] >= t1_start) & (df_gsc[date_col_gsc] <= t1_end)] if date_col_gsc and not df_gsc.empty else pd.DataFrame()
-        df_gsc_t2 = df_gsc[(df_gsc[date_col_gsc] >= t2_start) & (df_gsc[date_col_gsc] <= t2_end)] if date_col_gsc and not df_gsc.empty else pd.DataFrame()
-        
-        df_ai_t1 = df_ai[(df_ai[date_col_ai] >= t1_start) & (df_ai[date_col_ai] <= t1_end)] if date_col_ai and not df_ai.empty else pd.DataFrame()
-        df_ai_t2 = df_ai[(df_ai[date_col_ai] >= t2_start) & (df_ai[date_col_ai] <= t2_end)] if date_col_ai and not df_ai.empty else pd.DataFrame()
-
-        def get_fusion_sum(df_source, target_strs):
-            if df_source.empty: return 0
-            if isinstance(target_strs, str): target_strs = [target_strs]
-            
-            for t in target_strs:
-                t_clean = str(t).replace(' ', '').replace('（', '(').replace('）', ')').lower()
-                for col in df_source.columns:
-                    c_clean = str(col).replace(' ', '').replace('（', '(').replace('）', ')').lower()
-                    if t_clean == c_clean:
-                        vals = df_source[col].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
-                        return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
-                        
-            for t in target_strs:
-                t_clean = str(t).replace(' ', '').replace('（', '(').replace('）', ')').lower()
-                for col in df_source.columns:
-                    c_clean = str(col).replace(' ', '').replace('（', '(').replace('）', ')').lower()
-                    if t_clean in c_clean:
-                        vals = df_source[col].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
-                        return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
-            return 0
-
-        table_metrics = [
-            ("销售额（GA4）", "de", ['ga4seo销售额'], True),
-            ("流量（GA4）", "de", ['seo流量'], False),
-            ("流量（Blog）", "de", ['seoblog流量'], False),
-            ("流量（站内）", "de", ['seo站内流量'], False),
-            ("AI Assistant 流量", "de", ['aiassistant流量'], False),
-            ("AI Assistant 销售额", "de", ['aiassistant销售额'], True),
-            ("点击（GSC）", "gsc", ["点击(gsc)_点击次数", "点击(gsc)"], False),
-            ("AI Performance（总）", "ai", ["aiperformance(gsc)_展示", "aiperformance(gsc)"], False),
-            ("AI Performance（非Blog）", "ai", ["aiperformance(非blog)_展示", "aiperformance(非blog)"], False),
-            ("AI Performance（Blog）", "ai", ["aiperformance(blog)_展示", "aiperformance(blog)"], False),
-            ("点击（非品牌词）", "gsc", ["点击(非品牌词点击)_点击次数", "点击(非品牌词)_点击次数"], False),
-            ("点击（Blog）", "gsc", ["点击(blog)_点击次数"], False),
-            ("点击（非Blog）", "gsc", ["点击(非blog)_点击次数"], False),
-            ("点击（非品牌词非Blog）", "gsc", ["点击(非品牌词非blog)_点击次数"], False),
-            ("点击（非品牌词非Blog非utm）", "gsc", ["点击(非品牌词非blog非utm)_点击次数"], False)
+        # 15 项标准指标
+        metrics_list = [
+            "销售额（GA4）", "流量（GA4）", "流量（Blog）", "流量（站内）", 
+            "AI Assistant 流量", "AI Assistant 销售额", "点击（GSC）", 
+            "AI Performance（总）", "AI Performance（非Blog）", "AI Performance（Blog）", 
+            "点击（非品牌词）", "点击（Blog）", "点击（非Blog）", 
+            "点击（非品牌词非Blog）", "点击（非品牌词非Blog非utm）"
         ]
+        currency_metrics = ["销售额（GA4）", "AI Assistant 销售额"]
 
+        # 初始化手动输入缓存数据
+        if "manual_df" not in st.session_state:
+            st.session_state.manual_df = pd.DataFrame({
+                "指标 (Metric)": metrics_list,
+                f"{t2_start.month}/{t2_start.day}-{t2_end.month}/{t2_end.day} (参照期)": [997.74, 3389, 2641, 666, 100, 221.60, 5322, 29405, 2049, 28723, 2308, 4461, 892, 161, 133],
+                f"{t1_start.month}/{t1_start.day}-{t1_end.month}/{t1_end.day} (本期)": [1272.99, 4002, 3276, 745, 153, 105.51, 6825, 35927, 2313, 34811, 3136, 5858, 993, 169, 140]
+            })
+
+        st.caption("✍️ **手动录入区**：双击单元格可直接修改数值（支持从 Excel 复制整列粘贴）：")
+        edited_df = st.data_editor(
+            st.session_state.manual_df, 
+            hide_index=True, 
+            use_container_width=True,
+            column_config={"指标 (Metric)": st.column_config.Column(disabled=True)}
+        )
+        st.session_state.manual_df = edited_df
+
+        # 实时自动计算对比排版表格
         html_table = f"""
 <div class="soft-card" style="padding: 0; overflow: hidden; margin-top: 10px;">
 <table style="width: 100%; border-collapse: collapse; text-align: center; font-family: 'Poppins', sans-serif;">
@@ -889,22 +862,22 @@ try:
 <th style="padding: 16px; font-weight: 600; color: #2D235C; text-align: center;">指标 (Metric)</th>
 <th style="padding: 16px; font-weight: 600; color: #2D235C;">{t2_start.month}/{t2_start.day}-{t2_end.month}/{t2_end.day}</th>
 <th style="padding: 16px; font-weight: 600; color: #2D235C;">{t1_start.month}/{t1_start.day}-{t1_end.month}/{t1_end.day}</th>
-<th style="padding: 16px; font-weight: 600; color: #2D235C;">对比上期 (Change)</th>
+<th style="padding: 16px; font-weight: 600; color: #2D235C;">环比上周 (Change)</th>
 </tr>
 </thead>
 <tbody>
 """
-        for m_name, source, search_keys, is_curr in table_metrics:
-            if source == "de":
-                v1 = get_sum(search_keys, t1_cols_de, is_curr)
-                v2 = get_sum(search_keys, t2_cols_de, is_curr)
-            elif source == "gsc":
-                v1 = get_fusion_sum(df_gsc_t1, search_keys)
-                v2 = get_fusion_sum(df_gsc_t2, search_keys)
-            else:
-                v1 = get_fusion_sum(df_ai_t1, search_keys)
-                v2 = get_fusion_sum(df_ai_t2, search_keys)
-                
+        for i, row in edited_df.iterrows():
+            m_name = row["指标 (Metric)"]
+            
+            try: v2 = float(str(row.iloc[1]).replace(',', '').replace('$', '').replace('%', '').strip())
+            except: v2 = 0.0
+            
+            try: v1 = float(str(row.iloc[2]).replace(',', '').replace('$', '').replace('%', '').strip())
+            except: v1 = 0.0
+            
+            is_curr = m_name in currency_metrics
+            
             v1_str = f"${v1:,.2f}" if is_curr else f"{v1:,.0f}"
             v2_str = f"${v2:,.2f}" if is_curr else f"{v2:,.0f}"
             
@@ -935,7 +908,6 @@ try:
         # ==========================================
         # 10. Raw Tables (底层数据透视)
         # ==========================================
-        # Raw Data Header (统一白色标题栏)
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
