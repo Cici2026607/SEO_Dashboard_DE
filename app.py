@@ -93,7 +93,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. Data Loader & Smart Matching
+# 1. Data Loader & Smart Matching 
 # ==========================================
 @st.cache_data(ttl=300)
 def load_and_clean_data():
@@ -493,7 +493,7 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细
+        # 6. 图表与明细 
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -692,12 +692,11 @@ try:
             st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
-        # 8. AI Performance Breakdown (全新 AI 专属模块)
+        # 8. AI Performance Breakdown 
         # ==========================================
         if date_col_ai and not df_ai.empty:
             st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-microchip"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">AI Performance Breakdown</h3></div>', unsafe_allow_html=True)
             
-            # AI 专属独立时间控制台
             col_ad1, col_achk, col_ad2 = st.columns([1.5, 1, 1.5])
             with col_ad1:
                 ai_dates = st.date_input("🗓️ Primary Date Range (AI)", [min_date, max_date], key="ai_d1")
@@ -755,11 +754,129 @@ try:
                 st.info("所选时间段暂无 AI Performance 数据。")
             st.markdown('</div>', unsafe_allow_html=True)
 
+        # ==========================================
+        # 9. Custom Comparison Table (全新周数据对比矩阵)
+        # ==========================================
+        st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-blue"><i class="fa-solid fa-table-list"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Custom Period Comparison</h3></div>', unsafe_allow_html=True)
+        
+        # 独立时间选择轴：默认上周和上上周
+        col_td1, col_tspace, col_td2 = st.columns([1.5, 0.5, 1.5])
+        default_t1_end = data_date
+        default_t1_start = data_date - timedelta(days=6)
+        default_t2_end = default_t1_start - timedelta(days=1)
+        default_t2_start = default_t2_end - timedelta(days=6)
+        
+        with col_td1:
+            t_dates_1 = st.date_input("🗓️ 本期时间 (Primary Period)", [default_t1_start, default_t1_end], key="tbl_d1")
+        with col_tspace:
+            st.markdown("<div style='text-align:center; padding-top:28px; font-weight:bold; color:#8E8CA7;'>VS</div>", unsafe_allow_html=True)
+        with col_td2:
+            t_dates_2 = st.date_input("🗓️ 参照时间 (Compare Period)", [default_t2_start, default_t2_end], key="tbl_d2")
+            
+        if len(t_dates_1) == 2: t1_start, t1_end = t_dates_1
+        else: t1_start = t1_end = t_dates_1[0]
+        
+        if len(t_dates_2) == 2: t2_start, t2_end = t_dates_2
+        else: t2_start = t2_end = t_dates_2[0]
+
+        # 三大主表的对比范围切割
+        t1_cols_de = [col for col, dt in date_mapping.items() if t1_start <= dt <= t1_end]
+        t2_cols_de = [col for col, dt in date_mapping.items() if t2_start <= dt <= t2_end]
+        
+        df_gsc_t1 = df_gsc[(df_gsc[date_col_gsc] >= t1_start) & (df_gsc[date_col_gsc] <= t1_end)] if date_col_gsc and not df_gsc.empty else pd.DataFrame()
+        df_gsc_t2 = df_gsc[(df_gsc[date_col_gsc] >= t2_start) & (df_gsc[date_col_gsc] <= t2_end)] if date_col_gsc and not df_gsc.empty else pd.DataFrame()
+        
+        df_ai_t1 = df_ai[(df_ai[date_col_ai] >= t1_start) & (df_ai[date_col_ai] <= t1_end)] if date_col_ai and not df_ai.empty else pd.DataFrame()
+        df_ai_t2 = df_ai[(df_ai[date_col_ai] >= t2_start) & (df_ai[date_col_ai] <= t2_end)] if date_col_ai and not df_ai.empty else pd.DataFrame()
+
+        # 定义融合表头模糊抓取算法
+        def get_fusion_sum(df_source, target_strs):
+            if df_source.empty: return 0
+            if isinstance(target_strs, str): target_strs = [target_strs]
+            for t in target_strs:
+                t_clean = str(t).replace(' ', '').replace('（', '(').replace('）', ')').lower()
+                for col in df_source.columns:
+                    c_clean = str(col).replace(' ', '').replace('（', '(').replace('）', ')').lower()
+                    if t_clean in c_clean:
+                        vals = df_source[col].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
+                        return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
+            return 0
+
+        # 要计算的核心指标池 [显示名称, 数据源(de/gsc/ai), 搜索关键词, 是否为货币]
+        table_metrics = [
+            ("销售额（GA4）", "de", ['ga4seo销售额', 'ga4销售额'], True),
+            ("流量（GA4）", "de", ['seo流量', '流量'], False),
+            ("流量（Blog）", "de", ['seo blog 流量', 'blog流量'], False),
+            ("流量（站内）", "de", ['seo 站内流量', '站内流量'], False),
+            ("AI Assistant 流量", "de", ['aiassistant流量', 'ai流量'], False),
+            ("AI Assistant 销售额", "de", ['aiassistant销售额', 'ai销售额'], True),
+            ("点击（GSC）", "gsc", ["点击(gsc)_点击", "点击(gsc)"], False),
+            ("AI Performance（总）", "ai", ["aiperformance(gsc)_展示", "aiperformance(gsc)"], False),
+            ("AI Performance（非Blog）", "ai", ["aiperformance(非blog)_展示", "aiperformance(非blog)"], False),
+            ("AI Performance（Blog）", "ai", ["aiperformance(blog)_展示", "aiperformance(blog)"], False),
+            ("点击（非品牌词）", "gsc", ["点击(非品牌词点击)_点击", "点击(非品牌词)_点击"], False),
+            ("点击（Blog）", "gsc", ["点击(blog)_点击"], False),
+            ("点击（非Blog）", "gsc", ["点击(非blog)_点击"], False),
+            ("点击（非品牌词非Blog）", "gsc", ["点击(非品牌词非blog)_点击"], False),
+            ("点击（非品牌词非Blog非utm）", "gsc", ["点击(非品牌词非blog非utm)_点击"], False)
+        ]
+
+        # 无缩进 HTML 构建，彻底根除排版 Bug
+        html_table = f"""
+<div class="soft-card" style="padding: 0; overflow: hidden;">
+<table style="width: 100%; border-collapse: collapse; text-align: center; font-family: 'Poppins', sans-serif;">
+<thead style="background-color: #F8FAFC; border-bottom: 2px solid #E2E8F0;">
+<tr>
+<th style="padding: 16px; font-weight: 600; color: #2D235C; text-align: center;">指标 (Metric)</th>
+<th style="padding: 16px; font-weight: 600; color: #2D235C;">{t1_start.strftime('%m/%d')} - {t1_end.strftime('%m/%d')}</th>
+<th style="padding: 16px; font-weight: 600; color: #2D235C;">{t2_start.strftime('%m/%d')} - {t2_end.strftime('%m/%d')}</th>
+<th style="padding: 16px; font-weight: 600; color: #2D235C;">对比上期 (Change)</th>
+</tr>
+</thead>
+<tbody>
+"""
+        for m_name, source, search_keys, is_curr in table_metrics:
+            if source == "de":
+                v1 = get_sum(search_keys, t1_cols_de, is_curr)
+                v2 = get_sum(search_keys, t2_cols_de, is_curr)
+            elif source == "gsc":
+                v1 = get_fusion_sum(df_gsc_t1, search_keys)
+                v2 = get_fusion_sum(df_gsc_t2, search_keys)
+            else:
+                v1 = get_fusion_sum(df_ai_t1, search_keys)
+                v2 = get_fusion_sum(df_ai_t2, search_keys)
+                
+            v1_str = f"${v1:,.2f}" if is_curr else f"{v1:,.0f}"
+            v2_str = f"${v2:,.2f}" if is_curr else f"{v2:,.0f}"
+            
+            if v2 == 0 and v1 > 0: pct = 999999
+            elif v2 == 0 and v1 == 0: pct = 0
+            else: pct = ((v1 - v2) / v2) * 100
+            
+            if pct == 0:
+                pct_str, pct_color = "0.00%", "#8E8CA7"
+            elif pct == 999999:
+                pct_str, pct_color = "+∞%", "#22C55E"
+            else:
+                sign = "+" if pct > 0 else ""
+                pct_str = f"{sign}{pct:.2f}%"
+                pct_color = "#22C55E" if pct > 0 else "#FF6475"
+                
+            html_table += f"""
+<tr style="border-bottom: 1px solid #F0F1F6;">
+<td style="padding: 14px; font-weight: 500; color: #2D235C;">{m_name}</td>
+<td style="padding: 14px; color: #2D235C; font-weight: 500;">{v1_str}</td>
+<td style="padding: 14px; color: #8E8CA7;">{v2_str}</td>
+<td style="padding: 14px; font-weight: 700; color: {pct_color};">{pct_str}</td>
+</tr>
+"""
+        html_table += "</tbody></table></div>"
+        st.markdown(html_table, unsafe_allow_html=True)
 
         # ==========================================
-        # 9. Raw Tables (展示所有底层原生数据)
+        # 10. Raw Tables (展示所有底层原生数据)
         # ==========================================
-        st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
+        st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-database"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
         
         df_display = df_de[['Metric'] + [c for c in filtered_cols_1 if c in df_de.columns]].copy()
         df_display.columns = ['Metric'] + dates1
