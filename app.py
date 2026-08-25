@@ -125,15 +125,38 @@ def load_and_clean_data():
 
 @st.cache_data(ttl=300)
 def load_gsc_data():
-    # 强制将 pubhtml 转换为 csv 输出以便于精准抓取
+    # 读取 GSC，智能融合双表头，解决 Unnamed 合并单元格问题
     gsc_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdRQFVxjh71cKOiUdcf-j5Ob2GQzc_1WidEtXXx1tdc9Qjz5bWgzJtSEDbMU86i_4ATkmNV8rPITg1/pub?gid=0&single=true&output=csv"
     bust_url = f"{gsc_url}&_t={int(datetime.now().timestamp())}"
-    df = pd.read_csv(bust_url)
     
-    # 获取第一列作为日期基准
-    date_col = df.columns[0]
-    df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
-    df = df.dropna(subset=[date_col]).sort_values(date_col)
+    df_raw = pd.read_csv(bust_url, header=None)
+    
+    # 提取第一行并向下填充合并单元格 (如: 点击（GSC）向后填充)
+    row0 = df_raw.iloc[0].ffill()
+    row1 = df_raw.iloc[1]
+    
+    new_cols = []
+    for c, m in zip(row0, row1):
+        c_str = str(c).strip()
+        m_str = str(m).strip()
+        if '日' in m_str or 'date' in m_str.lower() or pd.isna(c) or c_str == 'nan':
+            new_cols.append(m_str)
+        else:
+            new_cols.append(f"{c_str}_{m_str}") # 生成诸如: 点击（GSC）_点击次数
+            
+    df = df_raw.iloc[2:].copy()
+    df.columns = new_cols
+    
+    date_col = None
+    for col in df.columns:
+        if '日' in str(col) or 'date' in str(col).lower():
+            date_col = col
+            break
+            
+    if date_col:
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
+        df = df.dropna(subset=[date_col]).sort_values(date_col)
+        
     return df, date_col
 
 try:
@@ -148,10 +171,10 @@ try:
         # ⭐ T-2 GA 数据延迟基准日逻辑
         # ==========================================
         real_today = datetime.now().date()
-        data_date = real_today - timedelta(days=2)
+        data_date = real_today - timedelta(days=2)  # MTD 记录时间延后2天
         current_year, current_month = data_date.year, data_date.month
 
-        # Welcome Banner (零缩进防错排版)
+        # Welcome Banner (强制左对齐，去除所有空格，杜绝 HTML 崩溃)
         st.markdown(f"""
 <div class="welcome-banner">
 <h1>
@@ -162,7 +185,6 @@ Hallo, Callie DE Team!
 </div>
 """, unsafe_allow_html=True)
         
-        # 8月新目标
         col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
             if st.button("🔄 Sync Data"):
@@ -365,11 +387,11 @@ Hallo, Callie DE Team!
             st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-regular fa-calendar"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Interval Analysis</h3></div>', unsafe_allow_html=True)
             st.caption("Modules below are strictly bounded by your date selection.")
         with header_col2:
-            primary_dates = st.date_input("🗓️ Primary Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+            primary_dates = st.date_input("🗓️ Primary Date Range", [min_date, max_date])
         with header_col3:
             enable_compare = st.checkbox("🔄 Enable Trend Comparison")
             if enable_compare:
-                compare_dates = st.date_input("🗓️ Compare Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+                compare_dates = st.date_input("🗓️ Compare Date Range", [min_date - timedelta(days=30), max_date - timedelta(days=30)])
             else: compare_dates = []
 
         if len(primary_dates) == 2: start_d1, end_d1 = primary_dates
@@ -382,7 +404,7 @@ Hallo, Callie DE Team!
         else: filtered_cols_2 = []
 
         # ==========================================
-        # 5. 区间漏斗与资产 (包含对比计算)
+        # 5. 区间漏斗与资产
         # ==========================================
         int_traffic = get_sum(['seo流量', '流量'], filtered_cols_1)
         int_blog = get_sum(['seo blog 流量', 'blog流量'], filtered_cols_1)
@@ -551,7 +573,7 @@ Hallo, Callie DE Team!
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 
+        # 6. 图表与明细
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -656,65 +678,109 @@ Hallo, Callie DE Team!
         st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
-        # 7. GSC Performance Breakdown (全新数据源集成)
+        # 7. GSC Performance Breakdown (专属 GSC 模块)
         # ==========================================
         if date_col_gsc and not df_gsc.empty:
             st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-orange"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">GSC Performance Breakdown</h3></div>', unsafe_allow_html=True)
-            st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
             
-            # 创建 6 个核心标签页
+            # GSC 专属独立时间控制台
+            col_gd1, col_gchk, col_gd2 = st.columns([1.5, 1, 1.5])
+            with col_gd1:
+                gsc_dates = st.date_input("🗓️ Primary Date Range (GSC)", [min_date, max_date], key="gsc_d1")
+            with col_gchk:
+                st.markdown('<div style="margin-top:28px;"></div>', unsafe_allow_html=True)
+                enable_gsc_cmp = st.checkbox("☑️ Enable GSC Comparison", key="gsc_cmp_chk")
+            with col_gd2:
+                if enable_gsc_cmp:
+                    gsc_comp_dates = st.date_input("🗓️ Compare Date Range (GSC)", [min_date - timedelta(days=30), max_date - timedelta(days=30)], key="gsc_d2")
+                else:
+                    gsc_comp_dates = []
+
+            if len(gsc_dates) == 2: gs_start, gs_end = gsc_dates
+            else: gs_start = gs_end = gsc_dates[0]
+            
+            mask_g1 = (df_gsc[date_col_gsc] >= gs_start) & (df_gsc[date_col_gsc] <= gs_end)
+            df_gsc_1 = df_gsc[mask_g1].copy()
+            dates_g1 = df_gsc_1[date_col_gsc].astype(str).tolist()
+
+            df_gsc_2 = pd.DataFrame()
+            if enable_gsc_cmp and len(gsc_comp_dates) == 2:
+                gc_start, gc_end = gsc_comp_dates
+                mask_g2 = (df_gsc[date_col_gsc] >= gc_start) & (df_gsc[date_col_gsc] <= gc_end)
+                df_gsc_2 = df_gsc[mask_g2].copy()
+
+            st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
             gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_tabs = st.tabs(gsc_segments)
-            cols_list = list(df_gsc.columns)
             
-            # 使用上面全局选定的 Primary 日期过滤 GSC 数据
-            mask_g1 = (df_gsc[date_col_gsc] >= start_d1) & (df_gsc[date_col_gsc] <= end_d1)
-            df_gsc_1 = df_gsc[mask_g1].copy()
-            
+            def clean_gsc(s):
+                if pd.isna(s): return 0
+                return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+                
             for i, tab in enumerate(gsc_tabs):
                 with tab:
-                    # 每 4 列为一组 (0是日期, 1-4为第一组)
-                    base_idx = 1 + i * 4
-                    c_clk = cols_list[base_idx] if base_idx < len(cols_list) else cols_list[-1]
-                    c_imp = cols_list[base_idx+1] if base_idx+1 < len(cols_list) else cols_list[-1]
-                    c_ctr = cols_list[base_idx+2] if base_idx+2 < len(cols_list) else cols_list[-1]
-                    c_pos = cols_list[base_idx+3] if base_idx+3 < len(cols_list) else cols_list[-1]
+                    seg = gsc_segments[i]
+                    c_clk = f"{seg}_点击次数"
+                    c_imp = f"{seg}_展示"
+                    c_ctr = f"{seg}_点击率"
+                    c_pos = f"{seg}_排名"
                     
-                    with st.expander("⚙️ 数据列校准 (如上方图表无数据或对应错误，请点此手动指定列)"):
+                    # 提供下拉框用于防止列名更改导致报错
+                    avail_cols = list(df_gsc.columns)
+                    if c_clk not in avail_cols: c_clk = avail_cols[1] if len(avail_cols)>1 else avail_cols[-1]
+                    if c_imp not in avail_cols: c_imp = avail_cols[2] if len(avail_cols)>2 else avail_cols[-1]
+                    if c_ctr not in avail_cols: c_ctr = avail_cols[3] if len(avail_cols)>3 else avail_cols[-1]
+                    if c_pos not in avail_cols: c_pos = avail_cols[4] if len(avail_cols)>4 else avail_cols[-1]
+                    
+                    with st.expander(f"⚙️ 数据列校准 (如当前无数据，请点此手动指定列)"):
                         c1, c2, c3, c4 = st.columns(4)
-                        with c1: c_clk = st.selectbox("点击次数 (Clicks)", cols_list, index=cols_list.index(c_clk), key=f"clk_{i}")
-                        with c2: c_imp = st.selectbox("展示 (Impressions)", cols_list, index=cols_list.index(c_imp), key=f"imp_{i}")
-                        with c3: c_ctr = st.selectbox("点击率 (CTR)", cols_list, index=cols_list.index(c_ctr), key=f"ctr_{i}")
-                        with c4: c_pos = st.selectbox("排名 (Position)", cols_list, index=cols_list.index(c_pos), key=f"pos_{i}")
-                    
-                    if not df_gsc_1.empty:
-                        dates_g1 = df_gsc_1[date_col_gsc].astype(str).tolist()
+                        with c1: c_clk = st.selectbox("点击次数 (Clicks)", avail_cols, index=avail_cols.index(c_clk), key=f"clk_{i}")
+                        with c2: c_imp = st.selectbox("展示 (Impressions)", avail_cols, index=avail_cols.index(c_imp), key=f"imp_{i}")
+                        with c3: c_ctr = st.selectbox("点击率 (CTR)", avail_cols, index=avail_cols.index(c_ctr), key=f"ctr_{i}")
+                        with c4: c_pos = st.selectbox("排名 (Position)", avail_cols, index=avail_cols.index(c_pos), key=f"pos_{i}")
                         
-                        def clean_gsc(s):
-                            if pd.isna(s): return 0
-                            val = str(s).replace(',', '').replace('%', '')
-                            return pd.to_numeric(val, errors='coerce')
-                            
+                    if not df_gsc_1.empty:
                         y_clk1 = df_gsc_1[c_clk].apply(clean_gsc).fillna(0).tolist()
                         y_imp1 = df_gsc_1[c_imp].apply(clean_gsc).fillna(0).tolist()
                         y_ctr1 = df_gsc_1[c_ctr].apply(clean_gsc).fillna(0).tolist()
                         y_pos1 = df_gsc_1[c_pos].apply(clean_gsc).fillna(0).tolist()
-                        
-                        # Graph 1: 点击次数与展示
+
+                        y_clk2 = df_gsc_2[c_clk].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
+                        y_imp2 = df_gsc_2[c_imp].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
+                        y_ctr2 = df_gsc_2[c_ctr].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
+                        y_pos2 = df_gsc_2[c_pos].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
+
+                        # 图表 1: 点击次数与展示
                         fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
-                        fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数", marker_color='#42D2E6', opacity=0.8), secondary_y=False)
-                        fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines', name="展示", line=dict(color='#8B5CF6', width=2)), secondary_y=True)
-                        fig_g1.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
+                        if not enable_gsc_cmp:
+                            fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数", marker_color='#42D2E6', opacity=0.8), secondary_y=False)
+                            fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines', name="展示", line=dict(color='#8B5CF6', width=2)), secondary_y=True)
+                        else:
+                            max_len = max(len(y_clk1), len(y_clk2))
+                            x_axis = [f"Day {j+1}" for j in range(max_len)]
+                            fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_clk1)], y=y_clk1, mode='lines', name="点击次数 (Pri)", line=dict(color='#42D2E6', width=3)), secondary_y=False)
+                            fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_clk2)], y=y_clk2, mode='lines', name="点击次数 (Cmp)", line=dict(color='#42D2E6', width=3, dash='dash')), secondary_y=False)
+                            fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_imp1)], y=y_imp1, mode='lines', name="展示 (Pri)", line=dict(color='#8B5CF6', width=2)), secondary_y=True)
+                            fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_imp2)], y=y_imp2, mode='lines', name="展示 (Cmp)", line=dict(color='#8B5CF6', width=2, dash='dash')), secondary_y=True)
+
+                        fig_g1.update_layout(height=280, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
                         fig_g1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g1, use_container_width=True)
-                        
-                        # Graph 2: 点击率与排名 (自动倒序)
+
+                        # 图表 2: 点击率与排名 (自动倒序)
                         fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
-                        fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines', name="点击率 (%)", line=dict(color='#22C55E', width=2)), secondary_y=False)
-                        fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines', name="排名", line=dict(color='#FF6475', width=2, dash='dot')), secondary_y=True)
-                        fig_g2.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
-                        fig_g2.update_yaxes(autorange="reversed", secondary_y=True) 
+                        if not enable_gsc_cmp:
+                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines', name="点击率 (%)", line=dict(color='#22C55E', width=2)), secondary_y=False)
+                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines', name="排名", line=dict(color='#FF6475', width=2, dash='dot')), secondary_y=True)
+                        else:
+                            fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr1)], y=y_ctr1, mode='lines', name="点击率 (Pri)", line=dict(color='#22C55E', width=2)), secondary_y=False)
+                            fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr2)], y=y_ctr2, mode='lines', name="点击率 (Cmp)", line=dict(color='#22C55E', width=2, dash='dash')), secondary_y=False)
+                            fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos1)], y=y_pos1, mode='lines', name="排名 (Pri)", line=dict(color='#FF6475', width=2, dash='dot')), secondary_y=True)
+                            fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos2)], y=y_pos2, mode='lines', name="排名 (Cmp)", line=dict(color='#FF6475', width=2, dash='dash')), secondary_y=True)
+
+                        fig_g2.update_layout(height=280, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
+                        fig_g2.update_yaxes(autorange="reversed", secondary_y=True) # 排名自动反转刻度
                         fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g2, use_container_width=True)
@@ -723,7 +789,7 @@ Hallo, Callie DE Team!
             st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
-        # 8. Raw Tables (底层数据透视)
+        # 8. Raw Tables (展示所有底层原生数据)
         # ==========================================
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-solid fa-table"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (Callie DE)</h3></div>', unsafe_allow_html=True)
         
@@ -736,9 +802,8 @@ Hallo, Callie DE Team!
         st.markdown('</div>', unsafe_allow_html=True)
         
         if date_col_gsc and not df_gsc.empty:
-            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (GSC 点击量)</h3></div>', unsafe_allow_html=True)
+            st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-gray"><i class="fa-brands fa-google"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Raw Data Matrix (GSC)</h3></div>', unsafe_allow_html=True)
             st.markdown('<div class="soft-card" style="padding: 16px;">', unsafe_allow_html=True)
-            # 在底部表格展示被选定日期过滤后的 GSC 原始数据
             st.dataframe(df_gsc_1, use_container_width=True, height=350)
             st.markdown('</div>', unsafe_allow_html=True)
 
