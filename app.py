@@ -540,6 +540,7 @@ try:
         dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
         dates2 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_2] if filtered_cols_2 else []
         
+        # Sales Chart
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -574,6 +575,7 @@ try:
         fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"))
         st.plotly_chart(fig_sales, use_container_width=True)
         
+        # Traffic Chart
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;">
     <div class="flex-center">
@@ -680,8 +682,6 @@ try:
                 '点击（非品牌词非Blog非utm）': '#10B981'
             }
             
-            # 同样直接套在卡片内，不加任何标题以免突兀
-            st.markdown('<div class="soft-card" style="padding-bottom:10px; margin-top:20px;">', unsafe_allow_html=True)
             selected_gsc_metrics = st.multiselect("Select GSC Metrics", gsc_segments, default=['点击（GSC）'], label_visibility="collapsed", key="gsc_trend_sel")
             
             fig_gsc_trend = go.Figure()
@@ -703,10 +703,8 @@ try:
                 st.plotly_chart(fig_gsc_trend, use_container_width=True)
             elif df_gsc_1.empty:
                 st.info("所选时间段暂无 GSC 数据。")
-            st.markdown('</div>', unsafe_allow_html=True)
             
             # ----------------- 详细展示 Tabs -----------------
-            st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
             gsc_tabs = st.tabs(gsc_segments)
                 
             for i, tab in enumerate(gsc_tabs):
@@ -773,7 +771,8 @@ try:
                         fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g2, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+                    else:
+                        st.info("所选时间段暂无 GSC 数据。")
 
         # ==========================================
         # 8. AI Performance Breakdown
@@ -815,7 +814,6 @@ try:
                 mask_a2 = (df_ai[date_col_ai] >= ac_start) & (df_ai[date_col_ai] <= ac_end)
                 df_ai_2 = df_ai[mask_a2].copy()
             
-            st.markdown('<div class="soft-card" style="padding-bottom:10px;">', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
             
@@ -844,10 +842,9 @@ try:
                 st.plotly_chart(fig_ai, use_container_width=True)
             elif df_ai_1.empty:
                 st.info("所选时间段暂无 AI Performance 数据。")
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # ==========================================
-        # 9. Custom Comparison Table
+        # 9. Custom Comparison Table (手动录入 + 动态表头 + 自动计算)
         # ==========================================
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
