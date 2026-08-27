@@ -614,7 +614,7 @@ try:
         st.plotly_chart(fig_traffic, use_container_width=True)
 
         # ==========================================
-        # 7. GSC Performance Breakdown (高定果冻柱状图 + 悬浮圆点曲线)
+        # 7. GSC Performance Breakdown 
         # ==========================================
         if date_col_gsc and not df_gsc.empty:
             st.markdown("""
@@ -653,12 +653,59 @@ try:
                 mask_g2 = (df_gsc[date_col_gsc] >= gc_start) & (df_gsc[date_col_gsc] <= gc_end)
                 df_gsc_2 = df_gsc[mask_g2].copy()
 
-            gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
-            gsc_tabs = st.tabs(gsc_segments)
-            
             def clean_gsc(s):
                 if pd.isna(s): return 0
                 return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+
+            def get_gsc_clicks_series(df_source, seg):
+                if df_source.empty: return []
+                c_clk = f"{seg}_点击次数"
+                if c_clk not in df_source.columns:
+                    c_clk = f"{seg}_点击" 
+                if c_clk not in df_source.columns:
+                    for c in df_source.columns:
+                        if seg in c and ('点击' in c or 'click' in c.lower()):
+                            c_clk = c
+                            break
+                if c_clk in df_source.columns:
+                    return df_source[c_clk].apply(clean_gsc).fillna(0).tolist()
+                return []
+
+            # ----------------- 找回 GSC Clicks Trend 折线图板块 (去白框) -----------------
+            gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
+            gsc_trend_colors = {
+                '点击（GSC）': '#2D235C',
+                '点击（非品牌词点击）': '#42D2E6',
+                '点击（Blog）': '#FF6475',
+                '点击（非Blog）': '#FFB000',
+                '点击（非品牌词非Blog）': '#8B5CF6',
+                '点击（非品牌词非Blog非utm）': '#10B981'
+            }
+            
+            selected_gsc_metrics = st.multiselect("Select GSC Metrics", gsc_segments, default=['点击（GSC）'], label_visibility="collapsed", key="gsc_trend_sel")
+            
+            fig_gsc_trend = go.Figure()
+            if selected_gsc_metrics and not df_gsc_1.empty:
+                for metric in selected_gsc_metrics:
+                    color = gsc_trend_colors[metric]
+                    y_gsc1 = get_gsc_clicks_series(df_gsc_1, metric)
+                    y_gsc2 = get_gsc_clicks_series(df_gsc_2, metric) if not df_gsc_2.empty else []
+                    
+                    if not enable_gsc_cmp:
+                        fig_gsc_trend.add_trace(go.Scatter(x=dates_g1, y=y_gsc1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    else:
+                        max_len = max(len(y_gsc1), len(y_gsc2))
+                        x_axis = [f"Day {j+1}" for j in range(max_len)]
+                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc1)], y=y_gsc1, mode='lines', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline')))
+                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc2)], y=y_gsc2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline')))
+                
+                fig_gsc_trend.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
+                st.plotly_chart(fig_gsc_trend, use_container_width=True)
+            elif df_gsc_1.empty:
+                st.info("所选时间段暂无 GSC 数据。")
+            
+            # ----------------- 详细展示 Tabs -----------------
+            gsc_tabs = st.tabs(gsc_segments)
                 
             for i, tab in enumerate(gsc_tabs):
                 with tab:
@@ -692,7 +739,6 @@ try:
                         y_ctr2 = df_gsc_2[c_ctr].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
                         y_pos2 = df_gsc_2[c_pos].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
 
-                        # Graph 1: 点击量 (带描边半透明柱状图) + 展示量 (圆点实心平滑折线)
                         fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
                         if not enable_gsc_cmp:
                             fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
@@ -710,7 +756,6 @@ try:
                         fig_g1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g1, use_container_width=True)
                         
-                        # Graph 2: 点击率 (实线+圆点) + 排名 (虚线倒序+圆点)
                         fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
                         if not enable_gsc_cmp:
                             fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines+markers', name="点击率 (%)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=7, color='#22C55E', line=dict(width=1.5, color='white'))), secondary_y=False)
@@ -726,8 +771,6 @@ try:
                         fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g2, use_container_width=True)
-                    else:
-                        st.info("所选时间段暂无 GSC 数据。")
 
         # ==========================================
         # 8. AI Performance Breakdown
