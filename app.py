@@ -247,14 +247,12 @@ try:
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
-            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
-                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -262,7 +260,6 @@ try:
                     if not matched.empty:
                         data = matched
                         break
-                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -671,7 +668,6 @@ try:
                     return df_source[c_clk].apply(clean_gsc).fillna(0).tolist()
                 return []
 
-            # ----------------- 找回 GSC Clicks Trend 折线图板块 (去白框) -----------------
             gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_trend_colors = {
                 '点击（GSC）': '#2D235C',
@@ -682,6 +678,7 @@ try:
                 '点击（非品牌词非Blog非utm）': '#10B981'
             }
             
+            # --- 找回的无白框 GSC 多选趋势图 ---
             selected_gsc_metrics = st.multiselect("Select GSC Metrics", gsc_segments, default=['点击（GSC）'], label_visibility="collapsed", key="gsc_trend_sel")
             
             fig_gsc_trend = go.Figure()
@@ -704,7 +701,7 @@ try:
             elif df_gsc_1.empty:
                 st.info("所选时间段暂无 GSC 数据。")
             
-            # ----------------- 详细展示 Tabs -----------------
+            # --- 原有双图表 Tabs ---
             gsc_tabs = st.tabs(gsc_segments)
                 
             for i, tab in enumerate(gsc_tabs):
@@ -812,6 +809,7 @@ try:
                 mask_a2 = (df_ai[date_col_ai] >= ac_start) & (df_ai[date_col_ai] <= ac_end)
                 df_ai_2 = df_ai[mask_a2].copy()
             
+            # --- 无白框 AI 多选趋势图 ---
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
             
@@ -889,8 +887,8 @@ try:
         if "manual_df" not in st.session_state:
             st.session_state.manual_df = pd.DataFrame({
                 "指标 (Metric)": metrics_list,
-                "参照期数值": [997.74, 3389, 2641, 666, 100, 221.60, 5322, 29405, 2049, 28723, 2308, 4461, 892, 161, 133],
-                "本期数值": [1272.99, 4002, 3276, 745, 153, 105.51, 6825, 35927, 2313, 34811, 3136, 5858, 993, 169, 140]
+                "参照期数值": [0.0] * 15,
+                "本期数值": [0.0] * 15
             })
 
         st.caption("✍️ **手动录入区**：双击单元格可直接修改数值（支持从 Excel 复制整列粘贴）：")
