@@ -244,15 +244,18 @@ try:
         lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
         ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
 
+        # 🔥 两段式精准匹配引擎
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
+            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
+                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -260,6 +263,7 @@ try:
                     if not matched.empty:
                         data = matched
                         break
+                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -678,7 +682,8 @@ try:
                 '点击（非品牌词非Blog非utm）': '#10B981'
             }
             
-            # --- 找回的无白框 GSC 多选趋势图 ---
+            # --- 找回的无白框 GSC 点击量多选图表 ---
+            st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             selected_gsc_metrics = st.multiselect("Select GSC Metrics", gsc_segments, default=['点击（GSC）'], label_visibility="collapsed", key="gsc_trend_sel")
             
             fig_gsc_trend = go.Figure()
@@ -701,7 +706,7 @@ try:
             elif df_gsc_1.empty:
                 st.info("所选时间段暂无 GSC 数据。")
             
-            # --- 原有双图表 Tabs ---
+            # --- 详细展示 Tabs ---
             gsc_tabs = st.tabs(gsc_segments)
                 
             for i, tab in enumerate(gsc_tabs):
@@ -810,6 +815,7 @@ try:
                 df_ai_2 = df_ai[mask_a2].copy()
             
             # --- 无白框 AI 多选趋势图 ---
+            st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
             
@@ -834,13 +840,13 @@ try:
                         fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai1)], y=y_ai1, mode='lines', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline')))
                         fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai2)], y=y_ai2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=c_color, width=3, dash='dash', shape='spline')))
                 
-                fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
+                fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
                 st.plotly_chart(fig_ai, use_container_width=True)
             elif df_ai_1.empty:
                 st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
-        # 9. Custom Comparison Table (手动录入 + 动态表头 + 自动计算)
+        # 9. Custom Comparison Table (防错位死锁机制)
         # ==========================================
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
@@ -884,14 +890,26 @@ try:
         ]
         currency_metrics = ["销售额（GA4）", "AI Assistant 销售额"]
 
-        if "manual_df" not in st.session_state:
+        # 强制防锁死：只要列名不对齐，强行洗掉缓存
+        if "manual_df" not in st.session_state or "参照期数值" not in st.session_state.manual_df.columns:
             st.session_state.manual_df = pd.DataFrame({
                 "指标 (Metric)": metrics_list,
                 "参照期数值": [0.0] * 15,
                 "本期数值": [0.0] * 15
             })
 
-        st.caption("✍️ **手动录入区**：双击单元格可直接修改数值（支持从 Excel 复制整列粘贴）：")
+        col_btn_clear, _ = st.columns([2, 8])
+        with col_btn_clear:
+            if st.button("🗑️ 清空重置表格 (Clear Table)"):
+                st.session_state.manual_df = pd.DataFrame({
+                    "指标 (Metric)": metrics_list,
+                    "参照期数值": [0.0] * 15,
+                    "本期数值": [0.0] * 15
+                })
+                st.rerun()
+
+        st.markdown("<p style='font-size:13px; color:#8E8CA7; margin-bottom:8px;'>✍️ <b>手动录入区</b>：双击单元格可直接修改数值。<br><span style='color:#FF6475;'><b>💡 防错位粘贴技巧</b>：从 Excel 复制一整列数据后，<b>请务必单击选中第一行（销售额）的空白单元格</b>，然后再按 <code>Ctrl+V</code>！</span></p>", unsafe_allow_html=True)
+        
         edited_df = st.data_editor(
             st.session_state.manual_df, 
             hide_index=True, 
@@ -917,12 +935,15 @@ try:
 </thead>
 <tbody>
 """
+        def safe_float(val):
+            if pd.isna(val) or val == "": return 0.0
+            try: return float(str(val).replace(',', '').replace('$', '').replace('%', '').strip())
+            except: return 0.0
+
         for i, row in edited_df.iterrows():
             m_name = row["指标 (Metric)"]
-            try: v2 = float(str(row["参照期数值"]).replace(',', '').replace('$', '').replace('%', '').strip())
-            except: v2 = 0.0
-            try: v1 = float(str(row["本期数值"]).replace(',', '').replace('$', '').replace('%', '').strip())
-            except: v1 = 0.0
+            v2 = safe_float(row["参照期数值"])
+            v1 = safe_float(row["本期数值"])
             
             is_curr = m_name in currency_metrics
             v1_str = f"${v1:,.2f}" if is_curr else f"{v1:,.0f}"
