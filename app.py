@@ -4,6 +4,7 @@ from datetime import datetime, date, timedelta
 import calendar
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import os  # 新增：用于后台本地文件存取，实现数据永不丢失
 
 # ==========================================
 # 0. Page Config
@@ -347,11 +348,10 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # ⭐ 新增: GSC Clicks MTD Monitoring
+        # ⭐ GSC Clicks MTD Monitoring (新增)
         # ==========================================
         def get_gsc_period_sum(start_d, end_d, seg='点击（GSC）'):
             if df_gsc is None or df_gsc.empty or not date_col_gsc: return 0.0
-            
             c_clk = f"{seg}_点击次数"
             if c_clk not in df_gsc.columns: c_clk = f"{seg}_点击" 
             if c_clk not in df_gsc.columns:
@@ -363,11 +363,9 @@ try:
             
             mask = (df_gsc[date_col_gsc] >= start_d) & (df_gsc[date_col_gsc] <= end_d)
             sub_df = df_gsc[mask]
-            
             def clean_val(s):
                 if pd.isna(s): return 0
                 return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
-                
             return sub_df[c_clk].apply(clean_val).fillna(0).sum()
 
         mtd_start = date(current_year, current_month, 1)
@@ -713,7 +711,6 @@ try:
                     return df_source[c_clk].apply(clean_gsc).fillna(0).tolist()
                 return []
 
-            # ----------------- 找回的无白框 GSC 点击趋势多选图 -----------------
             gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_trend_colors = {
                 '点击（GSC）': '#2D235C',
@@ -747,7 +744,6 @@ try:
             elif df_gsc_1.empty:
                 st.info("所选时间段暂无 GSC 数据。")
             
-            # ----------------- 详细展示 Tabs (悬浮果冻高定 UI) -----------------
             gsc_tabs = st.tabs(gsc_segments)
                 
             for i, tab in enumerate(gsc_tabs):
@@ -886,7 +882,7 @@ try:
                 st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
-        # 9. Custom Comparison Table
+        # 9. Custom Comparison Table (数据永驻本地版)
         # ==========================================
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
@@ -930,21 +926,28 @@ try:
         ]
         currency_metrics = ["销售额（GA4）", "AI Assistant 销售额"]
 
-        if "manual_df" not in st.session_state or "参照期数值" not in st.session_state.manual_df.columns:
-            st.session_state.manual_df = pd.DataFrame({
-                "指标 (Metric)": metrics_list,
-                "参照期数值": [0.0] * 15,
-                "本期数值": [0.0] * 15
-            })
+        CACHE_FILE = "manual_comparison_cache.csv"
+
+        # 初始化数据：优先从本地缓存文件读取，保证刷新不丢失
+        if "manual_df" not in st.session_state:
+            if os.path.exists(CACHE_FILE):
+                try:
+                    loaded_df = pd.read_csv(CACHE_FILE)
+                    if "参照期数值" in loaded_df.columns and "本期数值" in loaded_df.columns:
+                        st.session_state.manual_df = loaded_df
+                    else:
+                        raise Exception("Format mismatch")
+                except:
+                    st.session_state.manual_df = pd.DataFrame({"指标 (Metric)": metrics_list, "参照期数值": [0.0] * 15, "本期数值": [0.0] * 15})
+            else:
+                st.session_state.manual_df = pd.DataFrame({"指标 (Metric)": metrics_list, "参照期数值": [0.0] * 15, "本期数值": [0.0] * 15})
 
         col_btn_clear, _ = st.columns([2, 8])
         with col_btn_clear:
             if st.button("🗑️ 清空重置表格 (Clear Table)"):
-                st.session_state.manual_df = pd.DataFrame({
-                    "指标 (Metric)": metrics_list,
-                    "参照期数值": [0.0] * 15,
-                    "本期数值": [0.0] * 15
-                })
+                empty_df = pd.DataFrame({"指标 (Metric)": metrics_list, "参照期数值": [0.0] * 15, "本期数值": [0.0] * 15})
+                st.session_state.manual_df = empty_df
+                empty_df.to_csv(CACHE_FILE, index=False)
                 st.rerun()
 
         st.markdown("<p style='font-size:13px; color:#8E8CA7; margin-bottom:8px;'>✍️ <b>手动录入区</b>：双击单元格可直接修改数值。<br><span style='color:#FF6475;'><b>💡 防错位粘贴技巧</b>：从 Excel 复制一整列数据后，<b>请务必单击选中第一行（销售额）的空白单元格</b>，然后再按 <code>Ctrl+V</code>！</span></p>", unsafe_allow_html=True)
@@ -959,7 +962,10 @@ try:
                 "本期数值": st.column_config.Column(label=col_label_pri)
             }
         )
+        
+        # 实时自动将修改的数据存入本地 CSV 后台文件
         st.session_state.manual_df = edited_df
+        edited_df.to_csv(CACHE_FILE, index=False)
 
         html_table = f"""
 <div class="soft-card" style="padding: 0; overflow: hidden; margin-top: 10px;">
