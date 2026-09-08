@@ -214,7 +214,6 @@ try:
                 load_gsc_data.clear()
                 load_ai_perf_data.clear()
                 st.rerun()
-        # 🎯 9月份新目标更新
         with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=6500.0, step=500.0)
         with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=19000.0, step=1000.0)
                 
@@ -248,12 +247,14 @@ try:
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
+            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
+                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -261,6 +262,7 @@ try:
                     if not matched.empty:
                         data = matched
                         break
+                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -341,6 +343,48 @@ try:
 <div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Traffic MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">{mtd_traffic:,.0f}</h2></div>
 <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_traffic:,.0f}</h2><span style="color: {c2_m}; font-weight: 600; background: {bg2_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_m} {abs(mom_traf_pct):.1f}% MoM</span></div>
 <div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_traffic:,.0f}</h2><span style="color: {c2_y}; font-weight: 600; background: {bg2_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_y} {abs(yoy_traf_pct):.1f}% YoY</span></div>
+</div>
+""", unsafe_allow_html=True)
+
+        # ==========================================
+        # ⭐ 新增: GSC Clicks MTD Monitoring
+        # ==========================================
+        def get_gsc_period_sum(start_d, end_d, seg='点击（GSC）'):
+            if df_gsc is None or df_gsc.empty or not date_col_gsc: return 0.0
+            
+            c_clk = f"{seg}_点击次数"
+            if c_clk not in df_gsc.columns: c_clk = f"{seg}_点击" 
+            if c_clk not in df_gsc.columns:
+                for c in df_gsc.columns:
+                    if seg in c and ('点击' in c or 'click' in c.lower()):
+                        c_clk = c
+                        break
+            if c_clk not in df_gsc.columns: return 0.0
+            
+            mask = (df_gsc[date_col_gsc] >= start_d) & (df_gsc[date_col_gsc] <= end_d)
+            sub_df = df_gsc[mask]
+            
+            def clean_val(s):
+                if pd.isna(s): return 0
+                return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+                
+            return sub_df[c_clk].apply(clean_val).fillna(0).sum()
+
+        mtd_start = date(current_year, current_month, 1)
+        mtd_gsc = get_gsc_period_sum(mtd_start, data_date)
+        lm_gsc = get_gsc_period_sum(lm_start, lm_end)
+        ly_gsc = get_gsc_period_sum(ly_start, ly_end)
+        
+        mom_gsc_pct = ((mtd_gsc - lm_gsc) / lm_gsc) * 100 if lm_gsc > 0 else 0.0
+        yoy_gsc_pct = ((mtd_gsc - ly_gsc) / ly_gsc) * 100 if ly_gsc > 0 else 0.0
+        c3_m, bg3_m, arr3_m = get_trend_ui(mom_gsc_pct)
+        c3_y, bg3_y, arr3_y = get_trend_ui(yoy_gsc_pct)
+
+        st.markdown(f"""
+<div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
+<div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">GSC Clicks MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">{mtd_gsc:,.0f}</h2></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_gsc:,.0f}</h2><span style="color: {c3_m}; font-weight: 600; background: {bg3_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr3_m} {abs(mom_gsc_pct):.1f}% MoM</span></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_gsc:,.0f}</h2><span style="color: {c3_y}; font-weight: 600; background: {bg3_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr3_y} {abs(yoy_gsc_pct):.1f}% YoY</span></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -669,7 +713,7 @@ try:
                     return df_source[c_clk].apply(clean_gsc).fillna(0).tolist()
                 return []
 
-            # ----------------- 找回 GSC Clicks Trend 折线图板块 (完全去白框) -----------------
+            # ----------------- 找回的无白框 GSC 点击趋势多选图 -----------------
             gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_trend_colors = {
                 '点击（GSC）': '#2D235C',
@@ -703,7 +747,7 @@ try:
             elif df_gsc_1.empty:
                 st.info("所选时间段暂无 GSC 数据。")
             
-            # ----------------- 详细展示 Tabs -----------------
+            # ----------------- 详细展示 Tabs (悬浮果冻高定 UI) -----------------
             gsc_tabs = st.tabs(gsc_segments)
                 
             for i, tab in enumerate(gsc_tabs):
@@ -811,7 +855,6 @@ try:
                 mask_a2 = (df_ai[date_col_ai] >= ac_start) & (df_ai[date_col_ai] <= ac_end)
                 df_ai_2 = df_ai[mask_a2].copy()
             
-            # --- 完全去白框 AI 多选趋势图 ---
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
@@ -843,7 +886,7 @@ try:
                 st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
-        # 9. Custom Comparison Table (手动录入 + 动态表头 + 自动计算)
+        # 9. Custom Comparison Table
         # ==========================================
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
@@ -887,7 +930,6 @@ try:
         ]
         currency_metrics = ["销售额（GA4）", "AI Assistant 销售额"]
 
-        # 强制防锁死：只要列名不对齐，强行洗掉缓存
         if "manual_df" not in st.session_state or "参照期数值" not in st.session_state.manual_df.columns:
             st.session_state.manual_df = pd.DataFrame({
                 "指标 (Metric)": metrics_list,
