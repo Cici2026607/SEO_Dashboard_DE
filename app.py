@@ -4,7 +4,7 @@ from datetime import datetime, date, timedelta
 import calendar
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import os  # 新增：用于后台本地文件存取，实现数据永不丢失
+import os
 
 # ==========================================
 # 0. Page Config
@@ -352,6 +352,7 @@ try:
         # ==========================================
         def get_gsc_period_sum(start_d, end_d, seg='点击（GSC）'):
             if df_gsc is None or df_gsc.empty or not date_col_gsc: return 0.0
+            
             c_clk = f"{seg}_点击次数"
             if c_clk not in df_gsc.columns: c_clk = f"{seg}_点击" 
             if c_clk not in df_gsc.columns:
@@ -363,9 +364,11 @@ try:
             
             mask = (df_gsc[date_col_gsc] >= start_d) & (df_gsc[date_col_gsc] <= end_d)
             sub_df = df_gsc[mask]
+            
             def clean_val(s):
                 if pd.isna(s): return 0
                 return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+                
             return sub_df[c_clk].apply(clean_val).fillna(0).sum()
 
         mtd_start = date(current_year, current_month, 1)
@@ -580,7 +583,7 @@ try:
         dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
         dates2 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_2] if filtered_cols_2 else []
         
-        # Sales Chart
+        # ---------------- Sales Chart (新增带白边的悬浮圆点) ----------------
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -605,17 +608,17 @@ try:
                 s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
                 
                 if not s_trend2:
-                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=6, color=color, line=dict(width=1.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else:
                     max_len = max(len(s_trend1), len(s_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
-                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline')))
-                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline')))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=6, color=color, line=dict(width=1.5, color='white'))))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=6)))
             
         fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"))
         st.plotly_chart(fig_sales, use_container_width=True)
         
-        # Traffic Chart
+        # ---------------- Traffic Chart (新增带白边的悬浮圆点) ----------------
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;">
     <div class="flex-center">
@@ -643,12 +646,12 @@ try:
                 t_trend2 = get_trend_series(search_names, filtered_cols_2) if filtered_cols_2 else []
                 
                 if not t_trend2: 
-                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=6, color=color, line=dict(width=1.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else: 
                     max_len = max(len(t_trend1), len(t_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
-                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline')))
-                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline')))
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=6, color=color, line=dict(width=1.5, color='white'))))
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=6)))
 
         fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
         st.plotly_chart(fig_traffic, use_container_width=True)
@@ -721,6 +724,7 @@ try:
                 '点击（非品牌词非Blog非utm）': '#10B981'
             }
             
+            # ----------------- GSC Clicks Trend 折线图板块 (新增带白边的悬浮圆点) -----------------
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             selected_gsc_metrics = st.multiselect("Select GSC Metrics", gsc_segments, default=['点击（GSC）'], label_visibility="collapsed", key="gsc_trend_sel")
             
@@ -732,18 +736,19 @@ try:
                     y_gsc2 = get_gsc_clicks_series(df_gsc_2, metric) if not df_gsc_2.empty else []
                     
                     if not enable_gsc_cmp:
-                        fig_gsc_trend.add_trace(go.Scatter(x=dates_g1, y=y_gsc1, mode='lines', name=metric, line=dict(color=color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                        fig_gsc_trend.add_trace(go.Scatter(x=dates_g1, y=y_gsc1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=6, color=color, line=dict(width=1.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                     else:
                         max_len = max(len(y_gsc1), len(y_gsc2))
                         x_axis = [f"Day {j+1}" for j in range(max_len)]
-                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc1)], y=y_gsc1, mode='lines', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline')))
-                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc2)], y=y_gsc2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline')))
+                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc1)], y=y_gsc1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=6, color=color, line=dict(width=1.5, color='white'))))
+                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc2)], y=y_gsc2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=6)))
                 
                 fig_gsc_trend.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
                 st.plotly_chart(fig_gsc_trend, use_container_width=True)
             elif df_gsc_1.empty:
                 st.info("所选时间段暂无 GSC 数据。")
             
+            # ----------------- 详细展示 Tabs -----------------
             gsc_tabs = st.tabs(gsc_segments)
                 
             for i, tab in enumerate(gsc_tabs):
@@ -851,6 +856,7 @@ try:
                 mask_a2 = (df_ai[date_col_ai] >= ac_start) & (df_ai[date_col_ai] <= ac_end)
                 df_ai_2 = df_ai[mask_a2].copy()
             
+            # ---------------- AI Performance Chart (新增带白边的悬浮圆点) ----------------
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
@@ -869,12 +875,12 @@ try:
                     y_ai2 = df_ai_2[metric].apply(clean_ai).fillna(0).tolist() if not df_ai_2.empty else []
                     
                     if not enable_ai_cmp:
-                        fig_ai.add_trace(go.Scatter(x=dates_a1, y=y_ai1, mode='lines', name=metric, line=dict(color=c_color, width=3, shape='spline'), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
+                        fig_ai.add_trace(go.Scatter(x=dates_a1, y=y_ai1, mode='lines+markers', name=metric, line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=6, color=c_color, line=dict(width=1.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
                     else:
                         max_len = max(len(y_ai1), len(y_ai2))
                         x_axis = [f"Day {j+1}" for j in range(max_len)]
-                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai1)], y=y_ai1, mode='lines', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline')))
-                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai2)], y=y_ai2, mode='lines', name=f'{metric} (Cmp)', line=dict(color=c_color, width=3, dash='dash', shape='spline')))
+                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai1)], y=y_ai1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=6, color=c_color, line=dict(width=1.5, color='white'))))
+                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai2)], y=y_ai2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=c_color, width=3, dash='dash', shape='spline'), marker=dict(size=6)))
                 
                 fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
                 st.plotly_chart(fig_ai, use_container_width=True)
@@ -882,7 +888,7 @@ try:
                 st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
-        # 9. Custom Comparison Table (数据永驻本地版)
+        # 9. Custom Comparison Table
         # ==========================================
         st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
@@ -928,7 +934,6 @@ try:
 
         CACHE_FILE = "manual_comparison_cache.csv"
 
-        # 初始化数据：优先从本地缓存文件读取，保证刷新不丢失
         if "manual_df" not in st.session_state:
             if os.path.exists(CACHE_FILE):
                 try:
@@ -963,7 +968,6 @@ try:
             }
         )
         
-        # 实时自动将修改的数据存入本地 CSV 后台文件
         st.session_state.manual_df = edited_df
         edited_df.to_csv(CACHE_FILE, index=False)
 
