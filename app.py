@@ -215,8 +215,11 @@ try:
                 load_gsc_data.clear()
                 load_ai_perf_data.clear()
                 st.rerun()
-        with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=6500.0, step=500.0)
-        with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=19000.0, step=1000.0)
+        # --------------------
+        # ⭐ 10 月新目标已更新: Sales=6000, Traffic=18000
+        # --------------------
+        with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=6000.0, step=500.0)
+        with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=18000.0, step=1000.0)
                 
         # ==========================================
         # 2. 日期匹配与强力精准查表引擎
@@ -248,14 +251,12 @@ try:
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
-            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
-                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -263,7 +264,6 @@ try:
                     if not matched.empty:
                         data = matched
                         break
-                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -347,12 +347,8 @@ try:
 </div>
 """, unsafe_allow_html=True)
 
-        # ==========================================
-        # ⭐ GSC Clicks MTD Monitoring (新增)
-        # ==========================================
         def get_gsc_period_sum(start_d, end_d, seg='点击（GSC）'):
             if df_gsc is None or df_gsc.empty or not date_col_gsc: return 0.0
-            
             c_clk = f"{seg}_点击次数"
             if c_clk not in df_gsc.columns: c_clk = f"{seg}_点击" 
             if c_clk not in df_gsc.columns:
@@ -364,11 +360,9 @@ try:
             
             mask = (df_gsc[date_col_gsc] >= start_d) & (df_gsc[date_col_gsc] <= end_d)
             sub_df = df_gsc[mask]
-            
             def clean_val(s):
                 if pd.isna(s): return 0
                 return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
-                
             return sub_df[c_clk].apply(clean_val).fillna(0).sum()
 
         mtd_start = date(current_year, current_month, 1)
@@ -548,7 +542,7 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 (所有折线图统一加大圆点+白描边)
+        # 6. 图表与明细 (所有曲线图统一为高定圆点)
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -724,7 +718,7 @@ try:
                 '点击（非品牌词非Blog非utm）': '#10B981'
             }
             
-            # --- GSC Clicks Trend (大圆点版) ---
+            # --- GSC Clicks Trend ---
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             selected_gsc_metrics = st.multiselect("Select GSC Metrics", gsc_segments, default=['点击（GSC）'], label_visibility="collapsed", key="gsc_trend_sel")
             
@@ -748,7 +742,7 @@ try:
             elif df_gsc_1.empty:
                 st.info("所选时间段暂无 GSC 数据。")
             
-            # --- GSC Detailed Tabs (大圆点版) ---
+            # --- GSC Detailed Tabs ---
             gsc_tabs = st.tabs(gsc_segments)
                 
             for i, tab in enumerate(gsc_tabs):
@@ -856,7 +850,7 @@ try:
                 mask_a2 = (df_ai[date_col_ai] >= ac_start) & (df_ai[date_col_ai] <= ac_end)
                 df_ai_2 = df_ai[mask_a2].copy()
             
-            # --- AI Perf Chart (大圆点版) ---
+            # --- AI Perf Chart ---
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
