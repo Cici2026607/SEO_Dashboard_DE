@@ -215,9 +215,6 @@ try:
                 load_gsc_data.clear()
                 load_ai_perf_data.clear()
                 st.rerun()
-        # --------------------
-        # ⭐ 10 月新目标已更新: Sales=6000, Traffic=18000
-        # --------------------
         with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=6000.0, step=500.0)
         with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=18000.0, step=1000.0)
                 
@@ -251,12 +248,14 @@ try:
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
+            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
+                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -264,6 +263,7 @@ try:
                     if not matched.empty:
                         data = matched
                         break
+                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -386,7 +386,7 @@ try:
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
-        # 4. 全局漏斗分析区间 
+        # 4. 全局漏斗分析区间 (全局统一中控)
         # ==========================================
         valid_dates = list(date_mapping.values())
         min_date = min(valid_dates) if valid_dates else date.today()
@@ -542,7 +542,7 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 (所有曲线图统一为高定圆点)
+        # 6. 图表与明细 
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -651,7 +651,7 @@ try:
         st.plotly_chart(fig_traffic, use_container_width=True)
 
         # ==========================================
-        # 7. GSC Performance Breakdown 
+        # 7. GSC Performance Breakdown (跟随全局中控)
         # ==========================================
         if date_col_gsc and not df_gsc.empty:
             st.markdown("""
@@ -665,29 +665,14 @@ try:
 </div>
 """, unsafe_allow_html=True)
             
-            col_gd1, col_gchk, col_gd2 = st.columns([1.5, 1, 1.5])
-            with col_gd1:
-                gsc_dates = st.date_input("🗓️ Primary Date Range (GSC)", [min_date, max_date], key="gsc_d1")
-            with col_gchk:
-                st.markdown('<div style="margin-top:28px;"></div>', unsafe_allow_html=True)
-                enable_gsc_cmp = st.checkbox("☑️ Enable GSC Comparison", key="gsc_cmp_chk")
-            with col_gd2:
-                if enable_gsc_cmp:
-                    gsc_comp_dates = st.date_input("🗓️ Compare Date Range (GSC)", [min_date - timedelta(days=30), max_date - timedelta(days=30)], key="gsc_d2")
-                else:
-                    gsc_comp_dates = []
-
-            if len(gsc_dates) == 2: gs_start, gs_end = gsc_dates
-            else: gs_start = gs_end = gsc_dates[0]
-            
-            mask_g1 = (df_gsc[date_col_gsc] >= gs_start) & (df_gsc[date_col_gsc] <= gs_end)
+            # 使用全局时间变量: start_d1, end_d1 & start_d2, end_d2
+            mask_g1 = (df_gsc[date_col_gsc] >= start_d1) & (df_gsc[date_col_gsc] <= end_d1)
             df_gsc_1 = df_gsc[mask_g1].copy()
             dates_g1 = df_gsc_1[date_col_gsc].astype(str).tolist()
 
             df_gsc_2 = pd.DataFrame()
-            if enable_gsc_cmp and len(gsc_comp_dates) == 2:
-                gc_start, gc_end = gsc_comp_dates
-                mask_g2 = (df_gsc[date_col_gsc] >= gc_start) & (df_gsc[date_col_gsc] <= gc_end)
+            if enable_compare and len(compare_dates) == 2:
+                mask_g2 = (df_gsc[date_col_gsc] >= start_d2) & (df_gsc[date_col_gsc] <= end_d2)
                 df_gsc_2 = df_gsc[mask_g2].copy()
 
             def clean_gsc(s):
@@ -729,7 +714,7 @@ try:
                     y_gsc1 = get_gsc_clicks_series(df_gsc_1, metric)
                     y_gsc2 = get_gsc_clicks_series(df_gsc_2, metric) if not df_gsc_2.empty else []
                     
-                    if not enable_gsc_cmp:
+                    if not enable_compare:
                         fig_gsc_trend.add_trace(go.Scatter(x=dates_g1, y=y_gsc1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                     else:
                         max_len = max(len(y_gsc1), len(y_gsc2))
@@ -778,7 +763,7 @@ try:
                         y_pos2 = df_gsc_2[c_pos].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
 
                         fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
-                        if not enable_gsc_cmp:
+                        if not enable_compare:
                             fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
                             fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines+markers', name="展示", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
                         else:
@@ -795,7 +780,7 @@ try:
                         st.plotly_chart(fig_g1, use_container_width=True)
                         
                         fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
-                        if not enable_gsc_cmp:
+                        if not enable_compare:
                             fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines+markers', name="点击率 (%)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
                             fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines+markers', name="排名", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
                         else:
@@ -811,7 +796,7 @@ try:
                         st.plotly_chart(fig_g2, use_container_width=True)
 
         # ==========================================
-        # 8. AI Performance Breakdown
+        # 8. AI Performance Breakdown (跟随全局中控)
         # ==========================================
         if date_col_ai and not df_ai.empty:
             st.markdown("""
@@ -825,29 +810,14 @@ try:
 </div>
 """, unsafe_allow_html=True)
             
-            col_ad1, col_achk, col_ad2 = st.columns([1.5, 1, 1.5])
-            with col_ad1:
-                ai_dates = st.date_input("🗓️ Primary Date Range (AI)", [min_date, max_date], key="ai_d1")
-            with col_achk:
-                st.markdown('<div style="margin-top:28px;"></div>', unsafe_allow_html=True)
-                enable_ai_cmp = st.checkbox("☑️ Enable AI Comparison", key="ai_cmp_chk")
-            with col_ad2:
-                if enable_ai_cmp:
-                    ai_comp_dates = st.date_input("🗓️ Compare Date Range (AI)", [min_date - timedelta(days=30), max_date - timedelta(days=30)], key="ai_d2")
-                else:
-                    ai_comp_dates = []
-
-            if len(ai_dates) == 2: as_start, as_end = ai_dates
-            else: as_start = as_end = ai_dates[0]
-            
-            mask_a1 = (df_ai[date_col_ai] >= as_start) & (df_ai[date_col_ai] <= as_end)
+            # 使用全局时间变量: start_d1, end_d1 & start_d2, end_d2
+            mask_a1 = (df_ai[date_col_ai] >= start_d1) & (df_ai[date_col_ai] <= end_d1)
             df_ai_1 = df_ai[mask_a1].copy()
             dates_a1 = df_ai_1[date_col_ai].astype(str).tolist()
 
             df_ai_2 = pd.DataFrame()
-            if enable_ai_cmp and len(ai_comp_dates) == 2:
-                ac_start, ac_end = ai_comp_dates
-                mask_a2 = (df_ai[date_col_ai] >= ac_start) & (df_ai[date_col_ai] <= ac_end)
+            if enable_compare and len(compare_dates) == 2:
+                mask_a2 = (df_ai[date_col_ai] >= start_d2) & (df_ai[date_col_ai] <= end_d2)
                 df_ai_2 = df_ai[mask_a2].copy()
             
             # --- AI Perf Chart ---
@@ -868,7 +838,7 @@ try:
                     y_ai1 = df_ai_1[metric].apply(clean_ai).fillna(0).tolist()
                     y_ai2 = df_ai_2[metric].apply(clean_ai).fillna(0).tolist() if not df_ai_2.empty else []
                     
-                    if not enable_ai_cmp:
+                    if not enable_compare:
                         fig_ai.add_trace(go.Scatter(x=dates_a1, y=y_ai1, mode='lines+markers', name=metric, line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
                     else:
                         max_len = max(len(y_ai1), len(y_ai2))
