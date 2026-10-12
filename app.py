@@ -248,14 +248,12 @@ try:
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
-            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
-                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -263,7 +261,6 @@ try:
                     if not matched.empty:
                         data = matched
                         break
-                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -357,7 +354,6 @@ try:
                         c_clk = c
                         break
             if c_clk not in df_gsc.columns: return 0.0
-            
             mask = (df_gsc[date_col_gsc] >= start_d) & (df_gsc[date_col_gsc] <= end_d)
             sub_df = df_gsc[mask]
             def clean_val(s):
@@ -406,12 +402,37 @@ try:
 
         if len(primary_dates) == 2: start_d1, end_d1 = primary_dates
         else: start_d1 = end_d1 = primary_dates[0]
-        filtered_cols_1 = [col for col, dt in date_mapping.items() if start_d1 <= dt <= end_d1]
+        
+        if enable_compare and len(compare_dates) == 2: start_d2, end_d2 = compare_dates
+        else: start_d2 = end_d2 = None
 
-        if enable_compare and len(compare_dates) == 2:
-            start_d2, end_d2 = compare_dates
-            filtered_cols_2 = [col for col, dt in date_mapping.items() if start_d2 <= dt <= end_d2]
-        else: filtered_cols_2 = []
+        # --- 提前过滤各大 DataFrame ---
+        filtered_cols_1 = [col for col, dt in date_mapping.items() if start_d1 <= dt <= end_d1]
+        filtered_cols_2 = [col for col, dt in date_mapping.items() if start_d2 and start_d2 <= dt <= end_d2] if enable_compare else []
+
+        if date_col_gsc and not df_gsc.empty:
+            mask_g1 = (df_gsc[date_col_gsc] >= start_d1) & (df_gsc[date_col_gsc] <= end_d1)
+            df_gsc_1 = df_gsc[mask_g1].copy()
+            dates_g1 = df_gsc_1[date_col_gsc].astype(str).tolist()
+            if enable_compare and start_d2:
+                mask_g2 = (df_gsc[date_col_gsc] >= start_d2) & (df_gsc[date_col_gsc] <= end_d2)
+                df_gsc_2 = df_gsc[mask_g2].copy()
+            else:
+                df_gsc_2 = pd.DataFrame()
+        else:
+            df_gsc_1, df_gsc_2, dates_g1 = pd.DataFrame(), pd.DataFrame(), []
+
+        if date_col_ai and not df_ai.empty:
+            mask_a1 = (df_ai[date_col_ai] >= start_d1) & (df_ai[date_col_ai] <= end_d1)
+            df_ai_1 = df_ai[mask_a1].copy()
+            dates_a1 = df_ai_1[date_col_ai].astype(str).tolist()
+            if enable_compare and start_d2:
+                mask_a2 = (df_ai[date_col_ai] >= start_d2) & (df_ai[date_col_ai] <= end_d2)
+                df_ai_2 = df_ai[mask_a2].copy()
+            else:
+                df_ai_2 = pd.DataFrame()
+        else:
+            df_ai_1, df_ai_2, dates_a1 = pd.DataFrame(), pd.DataFrame(), []
 
         # ==========================================
         # 5. 区间漏斗与资产
@@ -516,7 +537,48 @@ try:
 </div>
 </div>
 """, unsafe_allow_html=True)
-        
+
+        # ==========================================
+        # ⭐ 新增 GSC Clicks Breakdown (选定时间段内)
+        # ==========================================
+        if date_col_gsc and not df_gsc.empty:
+            gsc_metrics_list = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
+            gsc_colors = ['#FF6475', '#42D2E6', '#FFB000', '#8B5CF6', '#2D235C', '#10B981']
+            
+            def get_gsc_clicks_sum_local(df_source, seg):
+                if df_source is None or df_source.empty: return 0.0
+                c_clk = f"{seg}_点击次数"
+                if c_clk not in df_source.columns: c_clk = f"{seg}_点击" 
+                if c_clk not in df_source.columns:
+                    for c in df_source.columns:
+                        if seg in c and ('点击' in c or 'click' in c.lower()):
+                            c_clk = c
+                            break
+                if c_clk not in df_source.columns: return 0.0
+                def clean_val(s):
+                    if pd.isna(s): return 0
+                    return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+                return df_source[c_clk].apply(clean_val).fillna(0).sum()
+
+            gsc_html = f"""
+            <div class="soft-card">
+            <h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;"><div class="icon-small bg-orange flex-center" style="justify-content:center;"><i class="fa-brands fa-google"></i></div> GSC Clicks Breakdown (Selected Interval)</h4>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+            """
+            for idx, m_name in enumerate(gsc_metrics_list):
+                v1 = get_gsc_clicks_sum_local(df_gsc_1, m_name)
+                v2 = get_gsc_clicks_sum_local(df_gsc_2, m_name) if enable_compare else 0
+                c_hex = gsc_colors[idx]
+                gsc_html += f"""
+                <div class="inner-box box-light">
+                    <p class="box-label text-muted" style="margin-bottom:8px;"><i class="fa-solid fa-circle" style="color:{c_hex}; font-size:8px; margin-right:8px;"></i> {m_name}</p>
+                    <p class="box-value-dark" style="margin: 0; font-size: 28px;">{v1:,.0f}</p>
+                    {format_cmp(v1, v2)}
+                </div>
+                """
+            gsc_html += "</div></div>"
+            st.markdown(gsc_html, unsafe_allow_html=True)
+
         col_ai, col_google = st.columns(2)
         with col_ai:
             st.markdown(f"""
@@ -542,7 +604,7 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 
+        # 6. 图表与明细 (加长示例线 itemwidth=80)
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -602,14 +664,14 @@ try:
                 s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
                 
                 if not s_trend2:
-                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else:
                     max_len = max(len(s_trend1), len(s_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
                     fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
                     fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
             
-        fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"))
+        fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"), legend=dict(orientation="h", y=1.1, x=1, xanchor="right", itemwidth=80))
         st.plotly_chart(fig_sales, use_container_width=True)
         
         # --- Traffic Chart ---
@@ -640,14 +702,14 @@ try:
                 t_trend2 = get_trend_series(search_names, filtered_cols_2) if filtered_cols_2 else []
                 
                 if not t_trend2: 
-                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else: 
                     max_len = max(len(t_trend1), len(t_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
                     fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
                     fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
 
-        fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
+        fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.1, x=1, xanchor="right", itemwidth=80))
         st.plotly_chart(fig_traffic, use_container_width=True)
 
         # ==========================================
@@ -665,16 +727,6 @@ try:
 </div>
 """, unsafe_allow_html=True)
             
-            # 使用全局时间变量: start_d1, end_d1 & start_d2, end_d2
-            mask_g1 = (df_gsc[date_col_gsc] >= start_d1) & (df_gsc[date_col_gsc] <= end_d1)
-            df_gsc_1 = df_gsc[mask_g1].copy()
-            dates_g1 = df_gsc_1[date_col_gsc].astype(str).tolist()
-
-            df_gsc_2 = pd.DataFrame()
-            if enable_compare and len(compare_dates) == 2:
-                mask_g2 = (df_gsc[date_col_gsc] >= start_d2) & (df_gsc[date_col_gsc] <= end_d2)
-                df_gsc_2 = df_gsc[mask_g2].copy()
-
             def clean_gsc(s):
                 if pd.isna(s): return 0
                 return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
@@ -715,14 +767,14 @@ try:
                     y_gsc2 = get_gsc_clicks_series(df_gsc_2, metric) if not df_gsc_2.empty else []
                     
                     if not enable_compare:
-                        fig_gsc_trend.add_trace(go.Scatter(x=dates_g1, y=y_gsc1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                        fig_gsc_trend.add_trace(go.Scatter(x=dates_g1, y=y_gsc1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                     else:
                         max_len = max(len(y_gsc1), len(y_gsc2))
                         x_axis = [f"Day {j+1}" for j in range(max_len)]
                         fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc1)], y=y_gsc1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
                         fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc2)], y=y_gsc2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
                 
-                fig_gsc_trend.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
+                fig_gsc_trend.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.1, x=1, xanchor="right", itemwidth=80))
                 st.plotly_chart(fig_gsc_trend, use_container_width=True)
             elif df_gsc_1.empty:
                 st.info("所选时间段暂无 GSC 数据。")
@@ -764,8 +816,8 @@ try:
 
                         fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
                         if not enable_compare:
-                            fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
-                            fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines+markers', name="展示", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
+                            fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数 (Pri)", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
+                            fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines+markers', name="展示 (Pri)", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
                         else:
                             max_len = max(len(y_clk1), len(y_clk2))
                             x_axis = [f"Day {j+1}" for j in range(max_len)]
@@ -774,22 +826,22 @@ try:
                             fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_imp1)], y=y_imp1, mode='lines+markers', name="展示 (Pri)", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
                             fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_imp2)], y=y_imp2, mode='lines+markers', name="展示 (Cmp)", line=dict(color='rgba(255, 100, 117, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=True)
 
-                        fig_g1.update_layout(height=280, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
+                        fig_g1.update_layout(height=280, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right", itemwidth=80))
                         fig_g1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                         st.plotly_chart(fig_g1, use_container_width=True)
                         
                         fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
                         if not enable_compare:
-                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines+markers', name="点击率 (%)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
-                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines+markers', name="排名", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
+                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines+markers', name="点击率 (%) (Pri)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
+                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines+markers', name="排名 (Pri)", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
                         else:
                             fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr1)], y=y_ctr1, mode='lines+markers', name="点击率 (Pri)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
                             fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr2)], y=y_ctr2, mode='lines+markers', name="点击率 (Cmp)", line=dict(color='rgba(34, 197, 94, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=False)
                             fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos1)], y=y_pos1, mode='lines+markers', name="排名 (Pri)", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
                             fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos2)], y=y_pos2, mode='lines+markers', name="排名 (Cmp)", line=dict(color='rgba(139, 92, 246, 0.5)', width=2, dash='dash', shape='spline'), marker=dict(size=8)), secondary_y=True)
 
-                        fig_g2.update_layout(height=280, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right"))
+                        fig_g2.update_layout(height=280, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", y=1.1, x=1, xanchor="right", itemwidth=80))
                         fig_g2.update_yaxes(autorange="reversed", secondary_y=True) 
                         fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
                         fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
@@ -810,16 +862,6 @@ try:
 </div>
 """, unsafe_allow_html=True)
             
-            # 使用全局时间变量: start_d1, end_d1 & start_d2, end_d2
-            mask_a1 = (df_ai[date_col_ai] >= start_d1) & (df_ai[date_col_ai] <= end_d1)
-            df_ai_1 = df_ai[mask_a1].copy()
-            dates_a1 = df_ai_1[date_col_ai].astype(str).tolist()
-
-            df_ai_2 = pd.DataFrame()
-            if enable_compare and len(compare_dates) == 2:
-                mask_a2 = (df_ai[date_col_ai] >= start_d2) & (df_ai[date_col_ai] <= end_d2)
-                df_ai_2 = df_ai[mask_a2].copy()
-            
             # --- AI Perf Chart ---
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
@@ -839,14 +881,14 @@ try:
                     y_ai2 = df_ai_2[metric].apply(clean_ai).fillna(0).tolist() if not df_ai_2.empty else []
                     
                     if not enable_compare:
-                        fig_ai.add_trace(go.Scatter(x=dates_a1, y=y_ai1, mode='lines+markers', name=metric, line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
+                        fig_ai.add_trace(go.Scatter(x=dates_a1, y=y_ai1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
                     else:
                         max_len = max(len(y_ai1), len(y_ai2))
                         x_axis = [f"Day {j+1}" for j in range(max_len)]
                         fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai1)], y=y_ai1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white'))))
                         fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai2)], y=y_ai2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=c_color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
                 
-                fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'))
+                fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.1, x=1, xanchor="right", itemwidth=80))
                 st.plotly_chart(fig_ai, use_container_width=True)
             elif df_ai_1.empty:
                 st.info("所选时间段暂无 AI Performance 数据。")
