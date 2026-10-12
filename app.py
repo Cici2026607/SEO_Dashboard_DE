@@ -248,12 +248,14 @@ try:
         def get_sum(possible_names, cols, is_currency=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
+            
             for p in possible_names:
                 target = p.replace(' ', '').lower()
                 matched = df_de[df_de['Metric_Norm'] == target]
                 if not matched.empty:
                     data = matched
                     break
+                    
             if data.empty:
                 for p in possible_names:
                     target = p.replace(' ', '').lower()
@@ -261,6 +263,7 @@ try:
                     if not matched.empty:
                         data = matched
                         break
+                        
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
@@ -538,7 +541,7 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # ⭐ 新增 GSC Clicks Breakdown (严格顶格 HTML)
+        # ⭐ GSC Clicks Breakdown (选定时间段内)
         # ==========================================
         if date_col_gsc and not df_gsc.empty:
             gsc_metrics_list = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
@@ -576,6 +579,49 @@ try:
                 
             gsc_html += '</div></div>\n'
             st.markdown(gsc_html, unsafe_allow_html=True)
+
+        # ==========================================
+        # ⭐ 新增 AI Performance Breakdown (选定时间段内)
+        # ==========================================
+        if date_col_ai and not df_ai.empty:
+            ai_metrics_cards = [
+                ("AI Performance（GSC）", ['aiperformance(gsc)', 'aiperformance(总)', 'aiperformance'], '#8B5CF6'),
+                ("AI Performance（非Blog）", ['aiperformance(非blog)'], '#42D2E6'),
+                ("AI Performance（Blog）", ['aiperformance(blog)'], '#FF6475')
+            ]
+
+            def get_ai_perf_sum_local(df_source, target_keys):
+                if df_source is None or df_source.empty: return 0.0
+                for k in target_keys:
+                    k_clean = str(k).replace(' ', '').replace('（', '(').replace('）', ')').lower()
+                    for c in df_source.columns:
+                        c_clean = str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower()
+                        if f"{k_clean}_展示" in c_clean or f"{k_clean}_impressions" in c_clean or k_clean == c_clean:
+                            vals = df_source[c].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
+                            return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
+                    for c in df_source.columns:
+                        c_clean = str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower()
+                        if k_clean in c_clean:
+                            vals = df_source[c].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
+                            return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
+                return 0.0
+
+            ai_perf_html = ""
+            ai_perf_html += '<div class="soft-card">\n'
+            ai_perf_html += '<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;"><div class="icon-small bg-purple flex-center" style="justify-content:center;"><i class="fa-solid fa-microchip"></i></div> AI Performance Breakdown (Selected Interval)</h4>\n'
+            ai_perf_html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">\n'
+
+            for m_name, target_keys, c_hex in ai_metrics_cards:
+                v1_ai = get_ai_perf_sum_local(df_ai_1, target_keys)
+                v2_ai = get_ai_perf_sum_local(df_ai_2, target_keys) if enable_compare else 0
+                ai_perf_html += f'<div class="inner-box box-light">\n'
+                ai_perf_html += f'<p class="box-label text-muted" style="margin-bottom:8px;"><i class="fa-solid fa-circle" style="color:{c_hex}; font-size:8px; margin-right:8px;"></i> {m_name}</p>\n'
+                ai_perf_html += f'<p class="box-value-dark" style="margin: 0; font-size: 28px;">{v1_ai:,.0f}</p>\n'
+                ai_perf_html += f'{format_cmp(v1_ai, v2_ai)}\n'
+                ai_perf_html += f'</div>\n'
+
+            ai_perf_html += '</div></div>\n'
+            st.markdown(ai_perf_html, unsafe_allow_html=True)
 
         col_ai, col_google = st.columns(2)
         with col_ai:
@@ -662,7 +708,7 @@ try:
                 s_trend2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
                 
                 if not s_trend2:
-                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_sales.add_trace(go.Scatter(x=dates1, y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else:
                     max_len = max(len(s_trend1), len(s_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
@@ -700,7 +746,7 @@ try:
                 t_trend2 = get_trend_series(search_names, filtered_cols_2) if filtered_cols_2 else []
                 
                 if not t_trend2: 
-                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_traffic.add_trace(go.Scatter(x=dates1, y=t_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else: 
                     max_len = max(len(t_trend1), len(t_trend2))
                     x_axis = [f"Day {i+1}" for i in range(max_len)]
@@ -813,8 +859,8 @@ try:
 
                         fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
                         if not enable_compare:
-                            fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
-                            fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines+markers', name="展示", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
+                            fig_g1.add_trace(go.Bar(x=dates_g1, y=y_clk1, name="点击次数 (Pri)", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
+                            fig_g1.add_trace(go.Scatter(x=dates_g1, y=y_imp1, mode='lines+markers', name="展示 (Pri)", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
                         else:
                             max_len = max(len(y_clk1), len(y_clk2))
                             x_axis = [f"Day {j+1}" for j in range(max_len)]
@@ -830,8 +876,8 @@ try:
                         
                         fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
                         if not enable_compare:
-                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines+markers', name="点击率 (%)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
-                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines+markers', name="排名", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
+                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_ctr1, mode='lines+markers', name="点击率 (%) (Pri)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
+                            fig_g2.add_trace(go.Scatter(x=dates_g1, y=y_pos1, mode='lines+markers', name="排名 (Pri)", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
                         else:
                             fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr1)], y=y_ctr1, mode='lines+markers', name="点击率 (Pri)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
                             fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr2)], y=y_ctr2, mode='lines+markers', name="点击率 (Cmp)", line=dict(color='rgba(34, 197, 94, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=False)
@@ -859,7 +905,6 @@ try:
 </div>
 """, unsafe_allow_html=True)
             
-            # --- AI Perf Chart ---
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
@@ -878,7 +923,7 @@ try:
                     y_ai2 = df_ai_2[metric].apply(clean_ai).fillna(0).tolist() if not df_ai_2.empty else []
                     
                     if not enable_compare:
-                        fig_ai.add_trace(go.Scatter(x=dates_a1, y=y_ai1, mode='lines+markers', name=metric, line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
+                        fig_ai.add_trace(go.Scatter(x=dates_a1, y=y_ai1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
                     else:
                         max_len = max(len(y_ai1), len(y_ai2))
                         x_axis = [f"Day {j+1}" for j in range(max_len)]
