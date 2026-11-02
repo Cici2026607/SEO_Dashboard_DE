@@ -4,7 +4,6 @@ from datetime import datetime, date, timedelta
 import calendar
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import os
 
 # ==========================================
 # 0. Page Config
@@ -438,9 +437,6 @@ try:
         else:
             df_ai_1, df_ai_2, dates_a1 = pd.DataFrame(), pd.DataFrame(), []
 
-        # ==========================================
-        # 核心：时间聚合函数
-        # ==========================================
         def aggregate_trend(raw_dates, raw_values, freq='D', agg='sum'):
             if not raw_dates or not raw_values or len(raw_dates) == 0: return [], []
             df_temp = pd.DataFrame({'date': pd.to_datetime(raw_dates), 'val': raw_values})
@@ -662,7 +658,7 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 (聚合引擎+加长图例+靠左+大圆点)
+        # 6. 图表与明细
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -780,21 +776,7 @@ try:
         fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
         st.plotly_chart(fig_traffic, use_container_width=True)
 
-        # ==========================================
-        # 7. GSC Performance Breakdown 
-        # ==========================================
         if date_col_gsc and not df_gsc.empty:
-            st.markdown("""
-<div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
-    <div class="flex-center">
-        <div class="icon-small bg-orange flex-center" style="justify-content:center; margin-bottom: 0;">
-            <i class="fa-brands fa-google"></i>
-        </div>
-        <span class="text-main" style="font-weight:700; font-size:16px;">GSC Performance Breakdown</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-            
             def clean_gsc(s):
                 if pd.isna(s): return 0
                 return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
@@ -946,21 +928,7 @@ try:
                             fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                             st.plotly_chart(fig_g2, use_container_width=True)
 
-        # ==========================================
-        # 8. AI Performance Breakdown (跟随全局聚合)
-        # ==========================================
         if date_col_ai and not df_ai.empty:
-            st.markdown("""
-<div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
-    <div class="flex-center">
-        <div class="icon-small bg-purple flex-center" style="justify-content:center; margin-bottom: 0;">
-            <i class="fa-solid fa-microchip"></i>
-        </div>
-        <span class="text-main" style="font-weight:700; font-size:16px;">AI Performance Breakdown</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-            
             # --- AI Perf Chart ---
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
@@ -997,139 +965,6 @@ try:
                 st.plotly_chart(fig_ai, use_container_width=True)
             elif df_ai_1.empty:
                 st.info("所选时间段暂无 AI Performance 数据。")
-
-        # ==========================================
-        # 9. Custom Comparison Table
-        # ==========================================
-        st.markdown("""
-<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
-    <div class="flex-center">
-        <div class="icon-small bg-blue flex-center" style="justify-content:center; margin-bottom: 0;">
-            <i class="fa-solid fa-table-list"></i>
-        </div>
-        <span class="text-main" style="font-weight:700; font-size:16px;">Weekly Data Comparison</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-        
-        col_td1, col_tspace, col_td2 = st.columns([1.5, 0.5, 1.5])
-        default_t1_end = data_date
-        default_t1_start = data_date - timedelta(days=6)
-        default_t2_end = default_t1_start - timedelta(days=1)
-        default_t2_start = default_t2_end - timedelta(days=6)
-        
-        with col_td1:
-            t_dates_1 = st.date_input("🗓️ 本期时间 (Primary Period)", [default_t1_start, default_t1_end], key="tbl_d1")
-        with col_tspace:
-            st.markdown("<div style='text-align:center; padding-top:28px; font-weight:bold; color:#8E8CA7;'>VS</div>", unsafe_allow_html=True)
-        with col_td2:
-            t_dates_2 = st.date_input("🗓️ 参照时间 (Compare Period)", [default_t2_start, default_t2_end], key="tbl_d2")
-            
-        if len(t_dates_1) == 2: t1_start, t1_end = t_dates_1
-        else: t1_start = t1_end = t_dates_1[0]
-        
-        if len(t_dates_2) == 2: t2_start, t2_end = t_dates_2
-        else: t2_start = t2_end = t_dates_2[0]
-
-        col_label_ref = f"{t2_start.month}/{t2_start.day}-{t2_end.month}/{t2_end.day} (参照期)"
-        col_label_pri = f"{t1_start.month}/{t1_start.day}-{t1_end.month}/{t1_end.day} (本期)"
-
-        metrics_list = [
-            "销售额（GA4）", "流量（GA4）", "流量（Blog）", "流量（站内）", 
-            "AI Assistant 流量", "AI Assistant 销售额", "点击（GSC）", 
-            "AI Performance（总）", "AI Performance（非Blog）", "AI Performance（Blog）", 
-            "点击（非品牌词）", "点击（Blog）", "点击（非Blog）", 
-            "点击（非品牌词非Blog）", "点击（非品牌词非Blog非utm）"
-        ]
-        currency_metrics = ["销售额（GA4）", "AI Assistant 销售额"]
-
-        CACHE_FILE = "manual_comparison_cache.csv"
-
-        if "manual_df" not in st.session_state:
-            if os.path.exists(CACHE_FILE):
-                try:
-                    loaded_df = pd.read_csv(CACHE_FILE)
-                    if "参照期数值" in loaded_df.columns and "本期数值" in loaded_df.columns:
-                        st.session_state.manual_df = loaded_df
-                    else:
-                        raise Exception("Format mismatch")
-                except:
-                    st.session_state.manual_df = pd.DataFrame({"指标 (Metric)": metrics_list, "参照期数值": [0.0] * 15, "本期数值": [0.0] * 15})
-            else:
-                st.session_state.manual_df = pd.DataFrame({"指标 (Metric)": metrics_list, "参照期数值": [0.0] * 15, "本期数值": [0.0] * 15})
-
-        col_btn_clear, _ = st.columns([2, 8])
-        with col_btn_clear:
-            if st.button("🗑️ 清空重置表格 (Clear Table)"):
-                empty_df = pd.DataFrame({"指标 (Metric)": metrics_list, "参照期数值": [0.0] * 15, "本期数值": [0.0] * 15})
-                st.session_state.manual_df = empty_df
-                empty_df.to_csv(CACHE_FILE, index=False)
-                st.rerun()
-
-        st.markdown("<p style='font-size:13px; color:#8E8CA7; margin-bottom:8px;'>✍️ <b>手动录入区</b>：双击单元格可直接修改数值。<br><span style='color:#FF6475;'><b>💡 防错位粘贴技巧</b>：从 Excel 复制一整列数据后，<b>请务必单击选中第一行（销售额）的空白单元格</b>，然后再按 <code>Ctrl+V</code>！</span></p>", unsafe_allow_html=True)
-        
-        edited_df = st.data_editor(
-            st.session_state.manual_df, 
-            hide_index=True, 
-            use_container_width=True,
-            column_config={
-                "指标 (Metric)": st.column_config.Column(disabled=True),
-                "参照期数值": st.column_config.Column(label=col_label_ref),
-                "本期数值": st.column_config.Column(label=col_label_pri)
-            }
-        )
-        
-        st.session_state.manual_df = edited_df
-        edited_df.to_csv(CACHE_FILE, index=False)
-
-        html_table = f"""
-<div class="soft-card" style="padding: 0; overflow: hidden; margin-top: 10px;">
-<table style="width: 100%; border-collapse: collapse; text-align: center; font-family: 'Poppins', sans-serif;">
-<thead style="background-color: #F8FAFC; border-bottom: 2px solid #E2E8F0;">
-<tr>
-<th style="padding: 16px; font-weight: 600; color: #2D235C; text-align: center;">指标 (Metric)</th>
-<th style="padding: 16px; font-weight: 600; color: #2D235C;">{t2_start.month}/{t2_start.day}-{t2_end.month}/{t2_end.day}</th>
-<th style="padding: 16px; font-weight: 600; color: #2D235C;">{t1_start.month}/{t1_start.day}-{t1_end.month}/{t1_end.day}</th>
-<th style="padding: 16px; font-weight: 600; color: #2D235C;">环比上期 (Change)</th>
-</tr>
-</thead>
-<tbody>
-"""
-        def safe_float(val):
-            if pd.isna(val) or val == "": return 0.0
-            try: return float(str(val).replace(',', '').replace('$', '').replace('%', '').strip())
-            except: return 0.0
-
-        for i, row in edited_df.iterrows():
-            m_name = row["指标 (Metric)"]
-            v2 = safe_float(row["参照期数值"])
-            v1 = safe_float(row["本期数值"])
-            
-            is_curr = m_name in currency_metrics
-            v1_str = f"${v1:,.2f}" if is_curr else f"{v1:,.0f}"
-            v2_str = f"${v2:,.2f}" if is_curr else f"{v2:,.0f}"
-            
-            if v2 == 0 and v1 > 0: pct = 999999
-            elif v2 == 0 and v1 == 0: pct = 0
-            else: pct = ((v1 - v2) / v2) * 100
-            
-            if pct == 0: pct_str, pct_color = "0.00%", "#8E8CA7"
-            elif pct == 999999: pct_str, pct_color = "+∞%", "#22C55E"
-            else:
-                sign = "+" if pct > 0 else ""
-                pct_str = f"{sign}{pct:.2f}%"
-                pct_color = "#22C55E" if pct > 0 else "#FF6475"
-                
-            html_table += f"""
-<tr style="border-bottom: 1px solid #F0F1F6;">
-<td style="padding: 14px; font-weight: 500; color: #2D235C;">{m_name}</td>
-<td style="padding: 14px; color: #8E8CA7;">{v2_str}</td>
-<td style="padding: 14px; color: #2D235C; font-weight: 500;">{v1_str}</td>
-<td style="padding: 14px; font-weight: 700; color: {pct_color};">{pct_str}</td>
-</tr>
-"""
-        html_table += "</tbody></table></div>"
-        st.markdown(html_table, unsafe_allow_html=True)
 
         # ==========================================
         # 10. Raw Tables
