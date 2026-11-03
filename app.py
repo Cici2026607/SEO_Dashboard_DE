@@ -6,10 +6,11 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # ==========================================
-# 0. Page Config & Login
+# 0. Page Config
 # ==========================================
 st.set_page_config(page_title="Callie DE - SEO Dashboard", page_icon="🇩🇪", layout="wide")
 
+# ================= 登录验证 =================
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
@@ -26,340 +27,535 @@ if not st.session_state["logged_in"]:
             else:
                 st.error("用户名或密码错误")
     st.stop()
+# ============================================
 
-# ==========================================
-# CSS 样式
-# ==========================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
     @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
-    html, body, [class*="css"] { font-family: 'Poppins', sans-serif !important; color: #2D235C !important; }
+    
+    html, body, [class*="css"] { font-family: 'Poppins', 'Segoe UI', sans-serif !important; color: #2D235C !important; }
     [data-testid="stAppViewContainer"], .stApp { background-color: #F1F5F9 !important; }
     [data-testid="stHeader"] { background-color: transparent !important; }
-    .soft-card { background: #ffffff; border: 1px solid #E2E8F0; border-radius: 28px; padding: 30px; box-shadow: 0 10px 25px -5px rgba(15,23,42,0.08); margin-bottom: 24px; transition: 0.3s; }
-    .soft-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -10px rgba(15,23,42,0.12); }
-    .welcome-banner { background: linear-gradient(135deg, #1A1A24 0%, #9B1B30 65%, #D4AF37 100%); border-radius: 28px; padding: 32px 40px; color: white; margin-bottom: 30px; box-shadow: 0 16px 32px -10px rgba(155,27,48,0.4); }
+
+    .soft-card {
+        background-color: #ffffff; border: 1px solid #E2E8F0; border-radius: 28px; padding: 30px;
+        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
+        margin-bottom: 24px; transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .soft-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.12), 0 10px 15px -5px rgba(15, 23, 42, 0.08); }
+    
+    .welcome-banner {
+        background: linear-gradient(135deg, #1A1A24 0%, #9B1B30 65%, #D4AF37 100%); 
+        border-radius: 28px; padding: 32px 40px; color: white; margin-bottom: 30px; 
+        box-shadow: 0 16px 32px -10px rgba(155, 27, 48, 0.4); position: relative; overflow: hidden;
+    }
     .welcome-banner h1 { color: white !important; font-size: 36px; font-weight: 800; margin: 0 0 8px 0; display: flex; align-items: center; }
+    .welcome-banner p { color: rgba(255,255,255,0.9) !important; font-size: 16px; margin: 0; }
+    
     .progress-track { background-color: #F0F1F6; border-radius: 999px; height: 18px; width: 100%; position: relative; }
-    .progress-fill-red { background: linear-gradient(90deg, #FF8491 0%, #FF6475 100%); height: 100%; border-radius: 999px; }
-    .progress-fill-blue { background: linear-gradient(90deg, #6BE1F0 0%, #42D2E6 100%); height: 100%; border-radius: 999px; }
+    .progress-fill-red { background: linear-gradient(90deg, #FF8491 0%, #FF6475 100%); height: 100%; border-radius: 999px; transition: width 0.8s ease; box-shadow: 0 6px 16px -4px rgba(255, 100, 117, 0.6); }
+    .progress-fill-blue { background: linear-gradient(90deg, #6BE1F0 0%, #42D2E6 100%); height: 100%; border-radius: 999px; transition: width 0.8s ease; box-shadow: 0 6px 16px -4px rgba(66, 210, 230, 0.6); }
     .rocket-icon { position: absolute; right: -12px; top: -6px; font-size: 22px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15)); }
+    
     .icon-square { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 16px; margin-right: 16px; font-size: 22px; }
     .icon-small { width: 36px; height: 36px; border-radius: 12px; margin-right: 12px; font-size: 16px; }
-    .bg-red { background: #FFF0F2; color: #FF6475; } .bg-blue { background: #E8F9FB; color: #42D2E6; } .bg-purple { background: #F1F0F7; color: #2D235C; } .bg-orange { background: #FFF6E5; color: #FFB000; } .bg-gray { background: #F6F8FA; color: #8E8CA7; }
+    
+    .bg-red { background-color: #FFF0F2; color: #FF6475; }
+    .bg-blue { background-color: #E8F9FB; color: #42D2E6; }
+    .bg-purple { background-color: #F1F0F7; color: #2D235C; }
+    .bg-orange { background-color: #FFF6E5; color: #FFB000; }
+    .bg-gray { background-color: #F6F8FA; color: #8E8CA7; }
+    
     .flex-center { display: flex; align-items: center; }
-    div[data-testid="stButton"] button { background-color: #ffffff; border: 2px solid #F0F1F6; border-radius: 20px; color: #2D235C; font-weight: 600; padding: 6px 24px; box-shadow: 0 4px 10px rgba(45,35,92,0.03); transition: 0.3s; }
-    div[data-testid="stButton"] button:hover { transform: scale(1.03); background-color: #2D235C; border-color: #2D235C; color: #ffffff; }
-    .text-main { color: #2D235C !important; } .text-muted { color: #8E8CA7 !important; }
-    .funnel-item { flex: 1; border-right: 2px solid #F0F1F6; padding-left: 20px; } .funnel-item:last-child { border-right: none; }
+
+    div[data-testid="stButton"] button { background-color: #ffffff; border: 2px solid #F0F1F6; border-radius: 20px; color: #2D235C; font-weight: 600; padding: 6px 24px; box-shadow: 0 4px 10px rgba(45, 35, 92, 0.03); transition: all 0.3s ease; }
+    div[data-testid="stButton"] button:hover { transform: scale(1.03); background-color: #2D235C; border-color: #2D235C; box-shadow: 0 10px 20px -6px rgba(45, 35, 92, 0.4); color: #ffffff; }
+    
+    .text-main { color: #2D235C !important; }
+    .text-muted { color: #8E8CA7 !important; }
+    
+    .funnel-item { flex: 1; border-right: 2px solid #F0F1F6; padding-left: 20px; }
+    .funnel-item:last-child { border-right: none; }
     .funnel-title { color: #8E8CA7; font-size: 13px; font-weight:500; margin: 0 0 8px 0; display: flex; align-items: center; }
-    .funnel-dot { font-size: 10px; margin-right: 8px; } .funnel-value { color: #2D235C; font-size: 32px; font-weight: 700; margin: 0; }
-    .inner-box { padding: 20px 24px; border-radius: 20px; flex: 1; margin-right: 16px; } .inner-box:last-child { margin-right: 0; }
-    .box-deep { background-color: #2D235C; border: none; color: white;} .box-light { background-color: #ffffff; border: 2px solid #F0F1F6; }
+    .funnel-dot { font-size: 10px; margin-right: 8px; }
+    .funnel-value { color: #2D235C; font-size: 32px; font-weight: 700; margin: 0; }
+    
+    .inner-box { padding: 20px 24px; border-radius: 20px; flex: 1; margin-right: 16px; }
+    .inner-box:last-child { margin-right: 0; }
+    .box-deep { background-color: #2D235C; border: none; color: white;}
+    .box-light { background-color: #ffffff; border: 2px solid #F0F1F6; }
     .box-label { font-size: 13px; margin: 0 0 12px 0; display: flex; align-items: center; font-weight:500;}
-    .box-value-dark { font-size: 30px; font-weight: 700; color: #2D235C; margin: 0; } .box-value-white { font-size: 30px; font-weight: 700; color: #ffffff; margin: 0; }
+    .box-value-dark { font-size: 30px; font-weight: 700; color: #2D235C; margin: 0; }
+    .box-value-white { font-size: 30px; font-weight: 700; color: #ffffff; margin: 0; }
     .compare-date-str { font-size: 12px; color: #8E8CA7; font-weight: normal; margin-left: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. 核心数据处理工具集
-# ==========================================
-def hex_to_rgba(hex_color, alpha=0.1):
-    hex_color = hex_color.lstrip('#')
-    return f"rgba({int(hex_color[0:2],16)}, {int(hex_color[2:4],16)}, {int(hex_color[4:6],16)}, {alpha})"
-
-def clean_val(s):
-    if pd.isna(s): return 0
-    return pd.to_numeric(str(s).replace(',','').replace('$','').replace('%',''), errors='coerce')
-
-def clean_str(s):
-    return str(s).replace(' ', '').replace('（', '(').replace('）', ')').lower()
-
-def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
-    if not dates or df_src.empty: return [], []
-    if is_row_based:
-        data = pd.DataFrame()
-        for k in keys:
-            kc = clean_str(k)
-            matched = df_src[df_src['Metric_Norm'].str.contains(kc, na=False)]
-            if not matched.empty: data = matched; break
-        if data.empty: return [], []
-        raw_vals = [clean_val(data[d].iloc[0]) if d in data.columns else 0 for d in dates]
-        temp = pd.DataFrame({'date': pd.to_datetime(dates), 'val': raw_vals})
-    else:
-        c_tgt = ""
-        for k in keys:
-            kc = clean_str(k)
-            for c in df_src.columns:
-                cc = clean_str(c)
-                if kc in cc and ('点击' in cc or '展示' in cc or kc == cc): c_tgt = c; break
-            if c_tgt: break
-        if not c_tgt: return [], []
-        
-        dc = [c for c in df_src.columns if '日' in str(c) or 'date' in str(c).lower()][0]
-        mask = df_src[dc].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else "").isin(dates)
-        temp = df_src[mask].copy()
-        temp['val'] = temp[c_tgt].apply(clean_val)
-        temp['date'] = pd.to_datetime(temp[dc])
-        
-    temp.set_index('date', inplace=True)
-    res = temp.resample('D') if freq=='D' else (temp.resample('W-MON') if freq=='W' else temp.resample('ME'))
-    df_agg = res.sum().fillna(0) if agg=='sum' else res.mean().fillna(0)
-    
-    return df_agg.index, df_agg['val'].tolist()
-
-font_style = dict(family="Poppins", color="#8E8CA7")
-
-# ==========================================
-# 2. Data Loaders
+# 1. Data Loader & Smart Matching
 # ==========================================
 @st.cache_data(ttl=300)
-def load_data(url, is_de=False):
-    bust = f"{url}&_t={int(datetime.now().timestamp())}"
-    df_raw = pd.read_csv(bust, header=None)
-    if is_de:
-        r_cols = list(df_raw.iloc[21])
-        df = df_raw.iloc[23:40].copy()
-        c_cols = []
-        for i, c in enumerate(r_cols):
-            cs = str(c)
-            if i==0: c_cols.append("Metric")
-            elif pd.isna(c) or cs.lower()=='nan': c_cols.append(f"空_{i}")
-            elif cs in c_cols: c_cols.append(f"{cs}_重_{i}")
-            else: c_cols.append(cs)
-        df.columns = c_cols
-        df['Metric'] = df['Metric'].astype(str).str.strip()
-        df['Metric_Norm'] = df['Metric'].apply(clean_str)
-        return df[[c for c in df.columns if "空_" not in c]].dropna(subset=['Metric'])
-    else:
-        r0, r1 = df_raw.iloc[0].ffill(), df_raw.iloc[1]
-        new_cols = []
-        for c, m in zip(r0, r1):
-            cs, ms = str(c).strip(), str(m).strip()
-            new_cols.append(ms if ('日' in ms or 'date' in ms.lower() or pd.isna(c) or cs=='nan') else f"{cs}_{ms}")
-        df = df_raw.iloc[2:].copy()
-        df.columns = new_cols
-        dc = [c for c in df.columns if '日' in str(c) or 'date' in str(c).lower()][0]
-        df[dc] = pd.to_datetime(df[dc], errors='coerce').dt.date
-        return df.dropna(subset=[dc]).sort_values(dc), dc
+def load_and_clean_data():
+    csv_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4KTuYQtC6xsRIwgWLDK9aJUhqmKDmUg4XmMxbsKadyj4QSRM9GNvDjyYz7z8vzKj8nohA7a8ukiLz/pub?gid=0&single=true&output=csv"
+    bust_url = f"{csv_url}&_t={int(datetime.now().timestamp())}"
+    
+    df_raw = pd.read_csv(bust_url, header=None)
+    raw_columns = list(df_raw.iloc[21])
+    df_de = df_raw.iloc[23:40].copy()
+    
+    clean_columns = []
+    for i, col in enumerate(raw_columns):
+        if i == 0: clean_columns.append("Metric")
+        else:
+            col_str = str(col)
+            if pd.isna(col) or col_str.lower() == 'nan': clean_columns.append(f"空列_{i}")
+            elif col_str in clean_columns: clean_columns.append(f"{col_str}_重复_{i}")
+            else: clean_columns.append(col_str)
+                
+    df_de.columns = clean_columns
+    df_de.reset_index(drop=True, inplace=True)
+    df_de['Metric'] = df_de['Metric'].astype(str).str.strip()
+    df_de['Metric_Norm'] = df_de['Metric'].str.replace(' ', '', regex=False).str.lower()
+    df_de = df_de[df_de['Metric'].notna() & (df_de['Metric'] != '') & (df_de['Metric'].str.lower() != 'nan')]
+    cols_to_keep = [c for c in df_de.columns if "空列_" not in c]
+    return df_de[cols_to_keep]
+
+@st.cache_data(ttl=300)
+def load_gsc_data():
+    gsc_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdRQFVxjh71cKOiUdcf-j5Ob2GQzc_1WidEtXXx1tdc9Qjz5bWgzJtSEDbMU86i_4ATkmNV8rPITg1/pub?gid=0&single=true&output=csv"
+    bust_url = f"{gsc_url}&_t={int(datetime.now().timestamp())}"
+    df_raw = pd.read_csv(bust_url, header=None)
+    
+    row0 = df_raw.iloc[0].ffill()
+    row1 = df_raw.iloc[1]
+    
+    new_cols = []
+    for c, m in zip(row0, row1):
+        c_str = str(c).strip()
+        m_str = str(m).strip()
+        if '日' in m_str or 'date' in m_str.lower() or pd.isna(c) or c_str == 'nan':
+            new_cols.append(m_str)
+        else:
+            new_cols.append(f"{c_str}_{m_str}")
+            
+    df = df_raw.iloc[2:].copy()
+    df.columns = new_cols
+    
+    date_col = None
+    for col in df.columns:
+        if '日' in str(col) or 'date' in str(col).lower():
+            date_col = col
+            break
+            
+    if date_col:
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
+        df = df.dropna(subset=[date_col]).sort_values(date_col)
+    return df, date_col
+
+@st.cache_data(ttl=300)
+def load_ai_perf_data():
+    ai_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRdK5Va7wCzGJ3ysGE8H3oeCWjjGEVLZud1Y31ghdO68zLgrOfkfwLnh3VU_lhZttlUziSG4f7ZRTLU/pub?output=csv"
+    bust_url = f"{ai_url}&_t={int(datetime.now().timestamp())}"
+    df_raw = pd.read_csv(bust_url, header=None)
+    
+    row0 = df_raw.iloc[0].ffill()
+    row1 = df_raw.iloc[1]
+    
+    new_cols = []
+    for c, m in zip(row0, row1):
+        c_str = str(c).strip()
+        m_str = str(m).strip()
+        if '日' in m_str or 'date' in m_str.lower() or pd.isna(c) or c_str == 'nan':
+            new_cols.append(m_str)
+        else:
+            new_cols.append(f"{c_str}_{m_str}")
+            
+    df = df_raw.iloc[2:].copy()
+    df.columns = new_cols
+    
+    date_col = None
+    for col in df.columns:
+        if '日' in str(col) or 'date' in str(col).lower():
+            date_col = col
+            break
+            
+    if date_col:
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce').dt.date
+        df = df.dropna(subset=[date_col]).sort_values(date_col)
+    return df, date_col
 
 try:
-    with st.spinner('🚀 同步 Callie DE 数据...'):
-        url_de = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4KTuYQtC6xsRIwgWLDK9aJUhqmKDmUg4XmMxbsKadyj4QSRM9GNvDjyYz7z8vzKj8nohA7a8ukiLz/pub?gid=0&single=true&output=csv"
-        url_gsc = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdRQFVxjh71cKOiUdcf-j5Ob2GQzc_1WidEtXXx1tdc9Qjz5bWgzJtSEDbMU86i_4ATkmNV8rPITg1/pub?gid=0&single=true&output=csv"
-        url_ai = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRdK5Va7wCzGJ3ysGE8H3oeCWjjGEVLZud1Y31ghdO68zLgrOfkfwLnh3VU_lhZttlUziSG4f7ZRTLU/pub?output=csv"
-        
-        df_de = load_data(url_de, True)
-        try: df_gsc, dc_gsc = load_data(url_gsc)
-        except: df_gsc, dc_gsc = pd.DataFrame(), None
-        try: df_ai, dc_ai = load_data(url_ai)
-        except: df_ai, dc_ai = pd.DataFrame(), None
+    with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
+        df_de = load_and_clean_data()
+        try: df_gsc, date_col_gsc = load_gsc_data()
+        except Exception: df_gsc, date_col_gsc = pd.DataFrame(), None
+        try: df_ai, date_col_ai = load_ai_perf_data()
+        except Exception: df_ai, date_col_ai = pd.DataFrame(), None
 
-        today = datetime.now().date()
-        dt_data = today - timedelta(days=2)
-        c_yr, c_mo = dt_data.year, dt_data.month
+        # ==========================================
+        # ⭐ T-2 GA 数据延迟基准日逻辑
+        # ==========================================
+        real_today = datetime.now().date()
+        data_date = real_today - timedelta(days=2)
+        current_year, current_month = data_date.year, data_date.month
 
-        st.markdown(f'<div class="welcome-banner"><h1><img src="https://flagcdn.com/w80/de.png" style="height:36px; margin-right:16px; border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,0.3);">Hallo, Callie DE Team!</h1><p>Germany (DE) SEO Global Dashboard • Data Date: {dt_data.strftime("%Y-%m-%d")} (T-2)</p></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+<div class="welcome-banner">
+<h1><img src="https://flagcdn.com/w80/de.png" style="height: 36px; margin-right: 16px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);" alt="Germany Flag">Hallo, Callie DE Team!</h1>
+<p>Germany (DE) SEO Global Dashboard • Data Date: {data_date.strftime('%Y-%m-%d')} (T-2 GA Delay)</p>
+</div>
+""", unsafe_allow_html=True)
         
-        col_b, col_t1, col_t2 = st.columns([1.5, 2, 2])
-        with col_b:
-            if st.button("🔄 Sync Data"): load_data.clear(); st.rerun()
-        with col_t1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=6000.0, step=500.0)
-        with col_t2: target_traffic = st.number_input("⚡ DE Traffic Target", value=18000.0, step=1000.0)
+        col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
+        with col_btn:
+            if st.button("🔄 Sync Data (刷新底层缓存)"):
+                load_and_clean_data.clear()
+                load_gsc_data.clear()
+                load_ai_perf_data.clear()
+                st.rerun()
+        
+        # --- 更新为 10月份的新目标 ---
+        with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=6000.0, step=500.0)
+        with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=18000.0, step=1000.0)
                 
-        d_map = {c: pd.to_datetime(c).date() for c in df_de.columns if c not in ['Metric', 'Metric_Norm']}
+        # ==========================================
+        # 2. 日期匹配与强力精准查表引擎
+        # ==========================================
+        date_mapping = {}
+        for col in df_de.columns:
+            if col not in ['Metric', 'Metric_Norm']:
+                try: date_mapping[col] = pd.to_datetime(col).date()
+                except: pass
         
-        mtd_cols = [c for c, d in d_map.items() if d.year==c_yr and d.month==c_mo and d<=dt_data]
-        lm_yr, lm_mo = (c_yr, c_mo-1) if c_mo>1 else (c_yr-1, 12)
-        lm_d = min(dt_data.day, calendar.monthrange(lm_yr, lm_mo)[1])
-        lm_cols = [c for c, d in d_map.items() if date(lm_yr, lm_mo, 1) <= d <= date(lm_yr, lm_mo, lm_d)]
-        ly_yr = c_yr - 1
-        ly_d = min(dt_data.day, calendar.monthrange(ly_yr, c_mo)[1])
-        ly_cols = [c for c, d in d_map.items() if date(ly_yr, c_mo, 1) <= d <= date(ly_yr, c_mo, ly_d)]
+        mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
+        lm_year = current_year if current_month > 1 else current_year - 1
+        lm_month = current_month - 1 if current_month > 1 else 12
+        lm_day = min(data_date.day, calendar.monthrange(lm_year, lm_month)[1])
+        lm_start = date(lm_year, lm_month, 1)
+        lm_end = date(lm_year, lm_month, lm_day)
+        lm_cols = [col for col, dt in date_mapping.items() if lm_start <= dt <= lm_end]
 
-        curr_str = f"({c_mo:02d}/01 - {c_mo:02d}/{dt_data.day:02d})"
-        lm_str = f"({lm_yr}/{lm_mo:02d}/01 - {lm_mo:02d}/{lm_d:02d})"
-        ly_str = f"({ly_yr}/{c_mo:02d}/01 - {c_mo:02d}/{ly_d:02d})"
+        ly_year = current_year - 1
+        ly_day = min(data_date.day, calendar.monthrange(ly_year, current_month)[1])
+        ly_start = date(ly_year, current_month, 1)
+        ly_end = date(ly_year, current_month, ly_day)
+        ly_cols = [col for col, dt in date_mapping.items() if ly_start <= dt <= ly_end]
 
-        def sum_de(keys, cols, curr=False):
+        curr_str = f"({current_month:02d}/01 - {current_month:02d}/{data_date.day:02d})"
+        lm_str = f"({lm_year}/{lm_month:02d}/01 - {lm_month:02d}/{lm_day:02d})"
+        ly_str = f"({ly_year}/{current_month:02d}/01 - {current_month:02d}/{ly_day:02d})"
+
+        def get_sum(possible_names, cols, is_currency=False):
+            if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
-            for k in keys:
-                m = df_de[df_de['Metric_Norm'].str.contains(clean_str(k), na=False)]
-                if not m.empty: data = m; break
-            if data.empty or not cols: return 0.0
-            vc = [c for c in cols if c in data.columns]
-            if vc: return pd.to_numeric(data[vc].iloc[0].astype(str).str.replace(',','').str.replace('$',''), errors='coerce').fillna(0).sum()
+            for p in possible_names:
+                target = p.replace(' ', '').lower()
+                matched = df_de[df_de['Metric_Norm'] == target]
+                if not matched.empty:
+                    data = matched
+                    break
+            if data.empty:
+                for p in possible_names:
+                    target = p.replace(' ', '').lower()
+                    matched = df_de[df_de['Metric_Norm'].str.contains(target, na=False)]
+                    if not matched.empty:
+                        data = matched
+                        break
+            if not data.empty and cols:
+                valid_cols = [c for c in cols if c in data.columns]
+                if valid_cols:
+                    vals = data[valid_cols].iloc[0].astype(str).str.replace(',', '', regex=False)
+                    if is_currency: vals = vals.str.replace('$', '', regex=False)
+                    return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0.0
 
-        m_sls, lm_sls, ly_sls = sum_de(['ga4seo销售额'], mtd_cols, True), sum_de(['ga4seo销售额'], lm_cols, True), sum_de(['ga4seo销售额'], ly_cols, True)
-        m_trf, lm_trf, ly_trf = sum_de(['seo流量'], mtd_cols), sum_de(['seo流量'], lm_cols), sum_de(['seo流量'], ly_cols)
+        mtd_sales = get_sum(['ga4seo销售额'], mtd_cols, True)
+        lm_sales = get_sum(['ga4seo销售额'], lm_cols, True)
+        ly_sales = get_sum(['ga4seo销售额'], ly_cols, True)
 
-        p_sls = min(m_sls/target_sales, 1.0) if target_sales>0 else 0
-        p_trf = min(m_trf/target_traffic, 1.0) if target_traffic>0 else 0
+        mtd_traffic = get_sum(['seo流量'], mtd_cols)
+        lm_traffic = get_sum(['seo流量'], lm_cols)
+        ly_traffic = get_sum(['seo流量'], ly_cols)
+
+        prog_sales = min(mtd_sales / target_sales, 1.0) if target_sales > 0 else 0
+        prog_traffic = min(mtd_traffic / target_traffic, 1.0) if target_traffic > 0 else 0
+        gap_sales = max(0, target_sales - mtd_sales)
+        gap_traffic = max(0, target_traffic - mtd_traffic)
 
         st.markdown('<div class="flex-center" style="margin:20px 0;"><div class="icon-square bg-orange"><i class="fa-solid fa-bullseye"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Target Achievement (Monat)</h3></div>', unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(f'<div class="soft-card"><div style="display:flex; justify-content:space-between; margin-bottom:24px;"><div class="flex-center text-muted" style="font-weight:500;"><i class="fa-solid fa-sack-dollar" style="color:#FF6475; margin-right:8px;"></i> Sales Progress (GA4)</div><div style="color:#FF6475; font-weight:700;">Gap: $ {max(0, target_sales-m_sls):,.2f}</div></div><div style="margin-bottom:28px;"><span class="text-main" style="font-size:38px; font-weight:700;">$ {m_sls:,.2f}</span><span class="text-muted" style="margin-left:8px;">/ $ {target_sales:,.2f}</span></div><div class="progress-track"><div class="progress-fill-red" style="width: {p_sls*100}%;"></div><span class="rocket-icon">🎯</span></div><div style="text-align:right; margin-top:16px;"><span style="color:#FF6475; font-weight:800; font-size:18px;">{p_sls*100:.1f}%</span></div></div>', unsafe_allow_html=True)
-        with c2:
-            st.markdown(f'<div class="soft-card"><div style="display:flex; justify-content:space-between; margin-bottom:24px;"><div class="flex-center text-muted" style="font-weight:500;"><i class="fa-solid fa-users" style="color:#42D2E6; margin-right:8px;"></i> Traffic Progress</div><div style="color:#42D2E6; font-weight:700;">Gap: {max(0, target_traffic-m_trf):,.0f}</div></div><div style="margin-bottom:28px;"><span class="text-main" style="font-size:38px; font-weight:700;">{m_trf:,.0f}</span><span class="text-muted" style="margin-left:8px;">/ {target_traffic:,.0f}</span></div><div class="progress-track"><div class="progress-fill-blue" style="width: {p_trf*100}%;"></div><span class="rocket-icon">⚡</span></div><div style="text-align:right; margin-top:16px;"><span style="color:#42D2E6; font-weight:800; font-size:18px;">{p_trf*100:.1f}%</span></div></div>', unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+<div class="soft-card">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+<div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-sack-dollar" style="color:#FF6475; margin-right:8px;"></i> Sales Progress (GA4 Data)</div>
+<div style="color: #FF6475; font-size: 14px; font-weight: 700;">Gap: $ {gap_sales:,.2f}</div>
+</div>
+<div style="margin-bottom: 28px; display: flex; align-items: baseline;">
+<span class="text-main" style="font-size: 38px; font-weight: 700;">$ {mtd_sales:,.2f}</span>
+<span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ $ {target_sales:,.2f}</span>
+</div>
+<div class="progress-track"><div class="progress-fill-red" style="width: {prog_sales*100}%;"></div><span class="rocket-icon">🎯</span></div>
+<div style="text-align: right; margin-top: 16px;"><span style="color: #FF6475; font-weight: 800; font-size: 18px;">{prog_sales*100:.1f}%</span></div>
+</div>
+""", unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+<div class="soft-card">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+<div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-users" style="color:#42D2E6; margin-right:8px;"></i> Traffic Progress</div>
+<div style="color: #42D2E6; font-size: 14px; font-weight: 700;">Gap: {gap_traffic:,.0f}</div>
+</div>
+<div style="margin-bottom: 28px; display: flex; align-items: baseline;">
+<span class="text-main" style="font-size: 38px; font-weight: 700;">{mtd_traffic:,.0f}</span>
+<span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ {target_traffic:,.0f}</span>
+</div>
+<div class="progress-track"><div class="progress-fill-blue" style="width: {prog_traffic*100}%;"></div><span class="rocket-icon">⚡</span></div>
+<div style="text-align: right; margin-top: 16px;"><span style="color: #42D2E6; font-weight: 800; font-size: 18px;">{prog_traffic*100:.1f}%</span></div>
+</div>
+""", unsafe_allow_html=True)
 
-        def t_ui(pct): return ("#FF6475" if pct<0 else "#22C55E", "#FFF0F2" if pct<0 else "#F0FDF4", "↓" if pct<0 else "↑")
-        mm_s = ((m_sls-lm_sls)/lm_sls)*100 if lm_sls>0 else 0; yy_s = ((m_sls-ly_sls)/ly_sls)*100 if ly_sls>0 else 0
-        mm_t = ((m_trf-lm_trf)/lm_trf)*100 if lm_trf>0 else 0; yy_t = ((m_trf-ly_trf)/ly_trf)*100 if ly_trf>0 else 0
-        
         st.markdown('<div class="flex-center" style="margin:30px 0 20px 0;"><div class="icon-square bg-purple"><i class="fa-solid fa-chart-simple"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">MTD Monitoring</h3></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="soft-card" style="display:flex; justify-content:space-between; padding-bottom:30px;"><div style="flex:1;"><p class="text-muted" style="margin-bottom:8px;">Sales MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin:0; font-size:32px;">$ {m_sls:,.2f}</h2></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">$ {lm_sls:,.2f}</h2><span style="color:{t_ui(mm_s)[0]}; background:{t_ui(mm_s)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(mm_s)[2]} {abs(mm_s):.1f}% MoM</span></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">$ {ly_sls:,.2f}</h2><span style="color:{t_ui(yy_s)[0]}; background:{t_ui(yy_s)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(yy_s)[2]} {abs(yy_s):.1f}% YoY</span></div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="soft-card" style="display:flex; justify-content:space-between; padding-bottom:30px;"><div style="flex:1;"><p class="text-muted" style="margin-bottom:8px;">Traffic MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin:0; font-size:32px;">{m_trf:,.0f}</h2></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">{lm_trf:,.0f}</h2><span style="color:{t_ui(mm_t)[0]}; background:{t_ui(mm_t)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(mm_t)[2]} {abs(mm_t):.1f}% MoM</span></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">{ly_trf:,.0f}</h2><span style="color:{t_ui(yy_t)[0]}; background:{t_ui(yy_t)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(yy_t)[2]} {abs(yy_t):.1f}% YoY</span></div></div>', unsafe_allow_html=True)
+        def get_trend_ui(pct): return ("#FF6475" if pct < 0 else "#22C55E", "#FFF0F2" if pct < 0 else "#F0FDF4", "↓" if pct < 0 else "↑")
 
-        def g_gsc(sd, ed, key):
-            if df_gsc is None or df_gsc.empty or not dc_gsc: return 0.0
-            tgt = ""
-            for c in df_gsc.columns:
-                if clean_str(key) in clean_str(c) and '点击' in clean_str(c): tgt=c; break
-            if not tgt: return 0.0
-            return df_gsc[(df_gsc[dc_gsc]>=sd) & (df_gsc[dc_gsc]<=ed)][tgt].apply(clean_val).sum()
+        mom_sales_pct = ((mtd_sales - lm_sales) / lm_sales) * 100 if lm_sales > 0 else 0.0
+        yoy_sales_pct = ((mtd_sales - ly_sales) / ly_sales) * 100 if ly_sales > 0 else 0.0
+        c1_m, bg1_m, arr1_m = get_trend_ui(mom_sales_pct)
+        c1_y, bg1_y, arr1_y = get_trend_ui(yoy_sales_pct)
+
+        st.markdown(f"""
+<div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
+<div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Sales MTD (GA4) <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">$ {mtd_sales:,.2f}</h2></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {lm_sales:,.2f}</h2><span style="color: {c1_m}; font-weight: 600; background: {bg1_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_m} {abs(mom_sales_pct):.1f}% MoM</span></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {ly_sales:,.2f}</h2><span style="color: {c1_y}; font-weight: 600; background: {bg1_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr1_y} {abs(yoy_sales_pct):.1f}% YoY</span></div>
+</div>
+""", unsafe_allow_html=True)
         
-        m_g, lm_g, ly_g = g_gsc(date(c_yr, c_mo, 1), dt_data, '点击(gsc)'), g_gsc(date(lm_yr, lm_mo, 1), date(lm_yr, lm_mo, lm_d), '点击(gsc)'), g_gsc(date(ly_yr, c_mo, 1), date(ly_yr, c_mo, ly_d), '点击(gsc)')
-        mm_g = ((m_g-lm_g)/lm_g)*100 if lm_g>0 else 0; yy_g = ((m_g-ly_g)/ly_g)*100 if ly_g>0 else 0
-        st.markdown(f'<div class="soft-card" style="display:flex; justify-content:space-between; padding-bottom:30px;"><div style="flex:1;"><p class="text-muted" style="margin-bottom:8px;">GSC Clicks MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin:0; font-size:32px;">{m_g:,.0f}</h2></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">{lm_g:,.0f}</h2><span style="color:{t_ui(mm_g)[0]}; background:{t_ui(mm_g)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(mm_g)[2]} {abs(mm_g):.1f}% MoM</span></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">{ly_g:,.0f}</h2><span style="color:{t_ui(yy_g)[0]}; background:{t_ui(yy_g)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(yy_g)[2]} {abs(yy_g):.1f}% YoY</span></div></div>', unsafe_allow_html=True)
-        st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
+        mom_traf_pct = ((mtd_traffic - lm_traffic) / lm_traffic) * 100 if lm_traffic > 0 else 0.0
+        yoy_traf_pct = ((mtd_traffic - ly_traffic) / ly_traffic) * 100 if ly_traffic > 0 else 0.0
+        c2_m, bg2_m, arr2_m = get_trend_ui(mom_traf_pct)
+        c2_y, bg2_y, arr2_y = get_trend_ui(yoy_traf_pct)
+
+        st.markdown(f"""
+<div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
+<div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Traffic MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">{mtd_traffic:,.0f}</h2></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_traffic:,.0f}</h2><span style="color: {c2_m}; font-weight: 600; background: {bg2_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_m} {abs(mom_traf_pct):.1f}% MoM</span></div>
+<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_traffic:,.0f}</h2><span style="color: {c2_y}; font-weight: 600; background: {bg2_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr2_y} {abs(yoy_traf_pct):.1f}% YoY</span></div>
+</div>
+""", unsafe_allow_html=True)
 
         # ==========================================
-        # ⭐ Annual Trends (YoY Overview) 自动截断未完成月份 + 2025年5月起跑
+        # ⭐ 全局免筛选时间 年度趋势模块 (YoY)
         # ==========================================
-        st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-solid fa-chart-line"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Annual Trends (YoY Overview)</h3></div>', unsafe_allow_html=True)
+        st.markdown('<br><div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-solid fa-chart-line"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Annual Trends (YoY Overview)</h3></div>', unsafe_allow_html=True)
         st.caption("Auto-aggregated monthly trends comparing 2026 vs 2025 across all available data.")
         
-        def get_yoy_data(key, y, is_gsc=False):
-            res = {str(m):0.0 for m in range(1,13)}
+        def get_yoy_data(key_words, y, is_gsc=False):
+            res = {m: 0.0 for m in range(1, 13)}
             
+            # 判断截断月份（当年数据强制截断到上月，防止未完成的当月数据导致暴跌）
             last_valid_month = 12
-            if y == c_yr:
-                last_valid_month = c_mo - 1 if c_mo > 1 else 1
-            
+            if y == current_year:
+                last_valid_month = current_month - 1 if current_month > 1 else 1
+
             if is_gsc:
-                if df_gsc is None or df_gsc.empty: return []
+                if df_gsc is None or df_gsc.empty or not date_col_gsc: return []
                 c_tgt = ""
                 for c in df_gsc.columns:
-                    if clean_str(key) in clean_str(c) and '点击' in clean_str(c): c_tgt=c; break
+                    c_clean = str(c).replace(' ', '').lower()
+                    kw_clean = str(key_words).replace(' ', '').lower()
+                    if kw_clean in c_clean and '点击' in c_clean:
+                        c_tgt = c
+                        break
                 if not c_tgt: return []
-                df_t = df_gsc[pd.to_datetime(df_gsc[dc_gsc]).dt.year == y].copy()
+                
+                df_t = df_gsc[pd.to_datetime(df_gsc[date_col_gsc]).dt.year == y].copy()
                 if df_t.empty: return []
-                ms = df_t.groupby(pd.to_datetime(df_t[dc_gsc]).dt.month)[c_tgt].apply(lambda x: x.apply(clean_val).sum()).to_dict()
-                for m,v in ms.items(): res[str(m)] = v
+                df_t['m'] = pd.to_datetime(df_t[date_col_gsc]).dt.month
+                
+                def clean_v(x):
+                    if pd.isna(x): return 0
+                    return pd.to_numeric(str(x).replace(',','').replace('%',''), errors='coerce')
+                
+                grp = df_t.groupby('m')[c_tgt].apply(lambda x: x.apply(clean_v).sum()).to_dict()
+                for m, v in grp.items(): res[m] = v
             else:
-                data = df_de[df_de['Metric_Norm'].str.contains(clean_str(key), na=False)]
+                data = pd.DataFrame()
+                # 模糊匹配搜索，支持多个关键字用 | 隔开
+                for kw in key_words.split('|'):
+                    matched = df_de[df_de['Metric_Norm'].str.contains(kw.replace(' ','').lower(), na=False)]
+                    if not matched.empty:
+                        data = matched
+                        break
                 if data.empty: return []
+                
                 for c in data.columns:
-                    try:
-                        dt = pd.to_datetime(c)
-                        if dt.year == y: res[str(dt.month)] += clean_val(data[c].iloc[0])
-                    except: pass
+                    if c not in ['Metric', 'Metric_Norm']:
+                        try:
+                            dt = pd.to_datetime(c)
+                            if dt.year == y:
+                                val = str(data[c].iloc[0]).replace(',','').replace('$','').replace('%','')
+                                res[dt.month] += pd.to_numeric(val, errors='coerce').fillna(0)
+                        except: pass
                     
-            vals = [res[str(m)] for m in range(1,13)]
-            if all(v == 0 or v is None for v in vals): return []
+            vals = [res[m] for m in range(1, 13)]
+            if all(v == 0 or pd.isna(v) for v in vals): return []
             
+            # GSC 2025 年数据强制隐身 1~4月，从 5 月起跑
             if is_gsc and y == 2025:
-                vals = [None, None, None, None] + vals[4:]
-            
-            if y < c_yr:
+                vals = [None]*4 + vals[4:]
+                
+            if y < current_year:
                 last_m = 12
-                for i in range(11,-1,-1):
-                    if vals[i] != 0 and vals[i] is not None: last_m=i+1; break
+                for i in range(11, -1, -1):
+                    if vals[i] is not None and vals[i] != 0:
+                        last_m = i + 1
+                        break
                 return vals[:last_m]
             else:
                 return vals[:last_valid_month]
 
-        col_y1, col_y2 = st.columns(2)
-        mlbs = [f"{m}月" for m in range(1,13)]
-        layout_yoy = dict(font=dict(family="Poppins", color="#8E8CA7"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=250, legend=dict(orientation="h", y=1.15, x=0.5, xanchor="center", itemwidth=50))
+        col_yoy_1, col_yoy_2 = st.columns(2)
+        month_labels = [f"{m}月" for m in range(1, 13)]
         
-        with col_y1:
+        with col_yoy_1:
             st.markdown('<div class="soft-card" style="padding:16px 24px; margin-bottom:16px; border-radius:16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom:0;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700;">SEO 点击数据对比 (GSC 2026 vs 2025 YoY)</span></div></div>', unsafe_allow_html=True)
             y_tbs = st.tabs(['站内点击走势 (非品牌词非Blog非utm)', 'GSC 总点击趋势', 'Blog 点击走势'])
-            y_ks = ['点击(非品牌词非Blog非utm)', '点击(GSC)', '点击(Blog)']
+            y_ks = ['点击（非品牌词非Blog非utm）', '点击（GSC）', '点击（Blog）']
             for i, tb in enumerate(y_tbs):
                 with tb:
-                    v25, v26 = get_yoy_data(y_ks[i], 2025, True), get_yoy_data(y_ks[i], 2026, True)
+                    v25 = get_yoy_data(y_ks[i], 2025, True)
+                    v26 = get_yoy_data(y_ks[i], 2026, True)
                     fy = go.Figure()
-                    if v25: fy.add_trace(go.Scatter(x=mlbs[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=10, color='#F59E0B', line=dict(width=2, color='white'))))
-                    if v26: fy.add_trace(go.Scatter(x=mlbs[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=10, color='#3B82F6', line=dict(width=2, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
-                    fy.update_layout(**layout_yoy); fy.update_xaxes(showgrid=True, gridcolor='#F0F1F6'); fy.update_yaxes(showgrid=True, gridcolor='#F0F1F6')
+                    if v25: fy.add_trace(go.Scatter(x=month_labels[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=12, color='#F59E0B', line=dict(width=2.5, color='white'))))
+                    if v26: fy.add_trace(go.Scatter(x=month_labels[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=12, color='#3B82F6', line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
+                    fy.update_layout(font=dict(family="Poppins", color="#8E8CA7"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=280, legend=dict(orientation="h", y=1.15, x=0.5, xanchor="center", itemwidth=50))
+                    fy.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                    fy.update_yaxes(showgrid=True, gridcolor='#F0F1F6')
                     st.plotly_chart(fy, use_container_width=True)
-        with col_y2:
+        with col_yoy_2:
             st.markdown('<div class="soft-card" style="padding:16px 24px; margin-bottom:16px; border-radius:16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom:0;"><i class="fa-solid fa-robot"></i></div><span class="text-main" style="font-weight:700;">AI Assistant 年度对比 (2026 vs 2025 YoY)</span></div></div>', unsafe_allow_html=True)
             a_tbs = st.tabs(['AI 贡献销售额月度同比', 'AI 来源流量月度同比'])
             with a_tbs[0]:
-                v25, v26 = get_yoy_data('aiassistant销售额', 2025), get_yoy_data('aiassistant销售额', 2026)
+                v25 = get_yoy_data('aiassistant销售额', 2025, False)
+                v26 = get_yoy_data('aiassistant销售额', 2026, False)
                 fa1 = go.Figure()
-                if v25: fa1.add_trace(go.Scatter(x=mlbs[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=10, color='#F59E0B', line=dict(width=2, color='white'))))
-                if v26: fa1.add_trace(go.Scatter(x=mlbs[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=10, color='#3B82F6', line=dict(width=2, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
-                fa1.update_layout(**layout_yoy); fa1.update_xaxes(showgrid=True, gridcolor='#F0F1F6'); fa1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', tickprefix="$")
+                if v25: fa1.add_trace(go.Scatter(x=month_labels[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=12, color='#F59E0B', line=dict(width=2.5, color='white'))))
+                if v26: fa1.add_trace(go.Scatter(x=month_labels[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=12, color='#3B82F6', line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
+                fa1.update_layout(font=dict(family="Poppins", color="#8E8CA7"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=280, legend=dict(orientation="h", y=1.15, x=0.5, xanchor="center", itemwidth=50))
+                fa1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                fa1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', tickprefix="$")
                 st.plotly_chart(fa1, use_container_width=True)
             with a_tbs[1]:
-                v25, v26 = get_yoy_data('aiassistant流量', 2025), get_yoy_data('aiassistant流量', 2026)
+                v25 = get_yoy_data('aiassistant流量', 2025, False)
+                v26 = get_yoy_data('aiassistant流量', 2026, False)
                 fa2 = go.Figure()
-                if v25: fa2.add_trace(go.Scatter(x=mlbs[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=10, color='#F59E0B', line=dict(width=2, color='white'))))
-                if v26: fa2.add_trace(go.Scatter(x=mlbs[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=10, color='#3B82F6', line=dict(width=2, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
-                fa2.update_layout(**layout_yoy); fa2.update_xaxes(showgrid=True, gridcolor='#F0F1F6'); fa2.update_yaxes(showgrid=True, gridcolor='#F0F1F6')
+                if v25: fa2.add_trace(go.Scatter(x=month_labels[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=12, color='#F59E0B', line=dict(width=2.5, color='white'))))
+                if v26: fa2.add_trace(go.Scatter(x=month_labels[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=12, color='#3B82F6', line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
+                fa2.update_layout(font=dict(family="Poppins", color="#8E8CA7"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=280, legend=dict(orientation="h", y=1.15, x=0.5, xanchor="center", itemwidth=50))
+                fa2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                fa2.update_yaxes(showgrid=True, gridcolor='#F0F1F6')
                 st.plotly_chart(fa2, use_container_width=True)
 
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
-        # 4. 全局漏斗分析区间 (全局时间中控)
+        # 4. 全局漏斗分析区间 (加入时间聚合引擎)
         # ==========================================
-        v_dates = list(d_map.values())
-        mn_d, mx_d = min(v_dates) if v_dates else date.today(), max(v_dates) if v_dates else date.today()
+        valid_dates = list(date_mapping.values())
+        min_date = min(valid_dates) if valid_dates else date.today()
+        max_date = max(valid_dates) if valid_dates else date.today()
 
-        hc1, hc2, hc3, hc4 = st.columns([1.5, 1, 1, 1.2])
-        with hc1:
+        header_col1, header_col2, header_col3, header_col4 = st.columns([1.5, 1, 1, 1.2])
+        with header_col1:
             st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-regular fa-calendar"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Interval Analysis</h3></div>', unsafe_allow_html=True)
             st.caption("Modules below are strictly bounded by your date selection.")
-        with hc2: d1 = st.date_input("🗓️ Primary Date Range", [mn_d, mx_d])
-        with hc3:
-            en_cmp = st.checkbox("🔄 Enable Trend Comparison")
-            d2 = st.date_input("🗓️ Compare Date Range", [mn_d - timedelta(days=30), mx_d - timedelta(days=30)]) if en_cmp else []
-        with hc4:
+        with header_col2:
+            primary_dates = st.date_input("🗓️ Primary Date Range", [min_date, max_date])
+        with header_col3:
+            enable_compare = st.checkbox("🔄 Enable Trend Comparison")
+            if enable_compare:
+                compare_dates = st.date_input("🗓️ Compare Date Range", [min_date - timedelta(days=30), max_date - timedelta(days=30)])
+            else: compare_dates = []
+        with header_col4:
             st.markdown('<div style="margin-top:2px;"></div>', unsafe_allow_html=True)
-            freq = {"日 (Daily)": "D", "周 (Weekly)": "W", "月 (Monthly)": "M"}[st.radio("📊 Trend Aggregation", ["日 (Daily)", "周 (Weekly)", "月 (Monthly)"], horizontal=True)]
+            agg_opt = st.radio("📊 Trend Aggregation", ["日 (Daily)", "周 (Weekly)", "月 (Monthly)"], horizontal=True)
+            agg_map = {"日 (Daily)": "D", "周 (Weekly)": "W", "月 (Monthly)": "M"}
+            freq = agg_map[agg_opt]
 
-        sd1, ed1 = d1 if len(d1)==2 else (d1[0], d1[0])
-        sd2, ed2 = d2 if len(d2)==2 else (d2[0], d2[0]) if en_cmp and d2 else (None, None)
+        if len(primary_dates) == 2: start_d1, end_d1 = primary_dates
+        else: start_d1 = end_d1 = primary_dates[0]
         
-        fc1 = [c for c, d in d_map.items() if sd1 <= d <= ed1]
-        fc2 = [c for c, d in d_map.items() if sd2 and sd2 <= d <= ed2] if en_cmp else []
+        if enable_compare and len(compare_dates) == 2: start_d2, end_d2 = compare_dates
+        else: start_d2 = end_d2 = None
+
+        filtered_cols_1 = [col for col, dt in date_mapping.items() if start_d1 <= dt <= end_d1]
+        filtered_cols_2 = [col for col, dt in date_mapping.items() if start_d2 and start_d2 <= dt <= end_d2] if enable_compare else []
+
+        if date_col_gsc and not df_gsc.empty:
+            mask_g1 = (df_gsc[date_col_gsc] >= start_d1) & (df_gsc[date_col_gsc] <= end_d1)
+            df_gsc_1 = df_gsc[mask_g1].copy()
+            dates_g1 = df_gsc_1[date_col_gsc].astype(str).tolist()
+            if enable_compare and start_d2:
+                mask_g2 = (df_gsc[date_col_gsc] >= start_d2) & (df_gsc[date_col_gsc] <= end_d2)
+                df_gsc_2 = df_gsc[mask_g2].copy()
+            else:
+                df_gsc_2 = pd.DataFrame()
+        else:
+            df_gsc_1, df_gsc_2, dates_g1 = pd.DataFrame(), pd.DataFrame(), []
+
+        if date_col_ai and not df_ai.empty:
+            mask_a1 = (df_ai[date_col_ai] >= start_d1) & (df_ai[date_col_ai] <= end_d1)
+            df_ai_1 = df_ai[mask_a1].copy()
+            dates_a1 = df_ai_1[date_col_ai].astype(str).tolist()
+            if enable_compare and start_d2:
+                mask_a2 = (df_ai[date_col_ai] >= start_d2) & (df_ai[date_col_ai] <= end_d2)
+                df_ai_2 = df_ai[mask_a2].copy()
+            else:
+                df_ai_2 = pd.DataFrame()
+        else:
+            df_ai_1, df_ai_2, dates_a1 = pd.DataFrame(), pd.DataFrame(), []
+
+        # 时间聚合核心引擎
+        def aggregate_trend(raw_dates, raw_values, freq='D', agg='sum'):
+            if not raw_dates or not raw_values or len(raw_dates) == 0: return [], []
+            df_temp = pd.DataFrame({'date': pd.to_datetime(raw_dates), 'val': raw_values})
+            df_temp.set_index('date', inplace=True)
+            if freq == 'D': res = df_temp.resample('D')
+            elif freq == 'W': res = df_temp.resample('W-MON')
+            elif freq == 'M': res = df_temp.resample('ME')
+            
+            if agg == 'sum': df_agg = res.sum().fillna(0)
+            else: df_agg = res.mean().fillna(0)
+                
+            # 返回标准的 Datetime 对象，让 Plotly 智能渲染 X 轴，防止乱码拥挤
+            return df_agg.index, df_agg['val'].tolist()
+
+        # ==========================================
+        # 5. 区间漏斗与资产
+        # ==========================================
+        int_traffic = get_sum(['seo流量'], filtered_cols_1)
+        int_blog = get_sum(['seoblog流量'], filtered_cols_1)
+        int_insite = get_sum(['seo站内流量'], filtered_cols_1)
+        int_site_total = get_sum(['网站总流量'], filtered_cols_1)
         
-        d_g1 = [d.strftime('%Y-%m-%d') for d in pd.date_range(sd1, ed1)]
-        d_g2 = [d.strftime('%Y-%m-%d') for d in pd.date_range(sd2, ed2)] if en_cmp and sd2 else []
+        int_bounce_rate = 0.0
+        bounce_data = df_de[df_de['Metric_Norm'].str.contains('跳出率', na=False)]
+        if not bounce_data.empty and filtered_cols_1:
+            valid_br_cols = [c for c in filtered_cols_1 if c in bounce_data.columns]
+            if valid_br_cols:
+                br_vals = bounce_data[valid_br_cols].iloc[0].astype(str).str.replace('%', '', regex=False)
+                br_series = pd.to_numeric(br_vals, errors='coerce').dropna()
+                if not br_series.empty: int_bounce_rate = br_series.mean()
 
-        def f_cmp(v1, v2, is_curr=False, is_pct=False, inv=False, dark=False):
-            if not en_cmp: return ""
-            pct = 0 if v2==0 and v1==0 else (999999 if v2==0 else (v1-v2)/v2*100)
-            v2s = f"$ {v2:,.2f}" if is_curr else (f"{v2:.2f}%" if is_pct else f"{v2:,.0f}")
-            c = "#8E8CA7" if pct==0 else ("#22C55E" if (pct>0 and not inv) or (pct<0 and inv) else "#FF6475")
-            arr, p_str = ("","0.0%") if pct==0 else (("↑" if pct>0 else "↓"), "+∞%" if pct==999999 else f"{abs(pct):.1f}%")
-            return f"<div style='font-size:13px; color:{'rgba(255,255,255,0.7)' if dark else '#8E8CA7'}; margin-top:4px;'>vs {v2s} <span style='color:{c}; font-weight:700;'>{arr} {p_str}</span></div>"
-
-        # KPI 卡片
-        i_trf, c_trf = sum_de(['seo流量'], fc1), sum_de(['seo流量'], fc2)
-        i_blg, c_blg = sum_de(['seoblog流量'], fc1), sum_de(['seoblog流量'], fc2)
-        i_ins, c_ins = sum_de(['seo站内流量'], fc1), sum_de(['seo站内流量'], fc2)
-        i_sit, c_sit = sum_de(['网站总流量'], fc1), sum_de(['网站总流量'], fc2)
-        i_ga4, c_ga4 = sum_de(['ga4seo销售额'], fc1, True), sum_de(['ga4seo销售额'], fc2, True)
-        i_sup, c_sup = sum_de(['supersetseo销售额'], fc1, True), sum_de(['supersetseo销售额'], fc2, True)
-        i_ais, c_ais = sum_de(['aiassistant销售额'], fc1, True), sum_de(['aiassistant销售额'], fc2, True)
-        i_ait, c_ait = sum_de(['aiassistant流量'], fc1), sum_de(['aiassistant流量'], fc2)
+        int_ga4_sales = get_sum(['ga4seo销售额'], filtered_cols_1, True)
+        int_super_sales = get_sum(['supersetseo销售额'], filtered_cols_1, True)
+        ai_sales = get_sum(['aiassistant销售额'], filtered_cols_1, True)
+        ai_traffic = get_sum(['aiassistant流量'], filtered_cols_1)
         
-        br = df_de[df_de['Metric_Norm'].str.contains('跳出率', na=False)]
-        i_br = pd.to_numeric(br[[c for c in fc1 if c in br.columns]].iloc[0].astype(str).str.replace('%',''), errors='coerce').mean() if not br.empty and fc1 else 0.0
-        c_br = pd.to_numeric(br[[c for c in fc2 if c in br.columns]].iloc[0].astype(str).str.replace('%',''), errors='coerce').mean() if not br.empty and fc2 else 0.0
-
-        # 新增 Google Assets 数据抓取 (修复版)
-        def get_asset_latest(possible_names, cols):
+        def get_latest(possible_names, cols):
+            if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
             for p in possible_names:
                 target = p.replace(' ', '').lower()
@@ -376,143 +572,459 @@ try:
                         val = str(vals.iloc[-1]).replace(',', '').replace('$', '')
                         return pd.to_numeric(val, errors='coerce')
             return 0
+            
+        google_index = get_latest('收录', filtered_cols_1)
+        google_backlinks = get_latest('外链', filtered_cols_1)
+        google_domain = get_latest('外链域名广度', filtered_cols_1)
 
-        google_index = get_asset_latest(['收录'], fc1)
-        google_backlinks = get_asset_latest(['外链'], fc1)
-        google_domain = get_asset_latest(['外链域名广度'], fc1)
+        comp_traffic = get_sum(['seo流量'], filtered_cols_2) if filtered_cols_2 else 0
+        comp_blog = get_sum(['seoblog流量'], filtered_cols_2) if filtered_cols_2 else 0
+        comp_insite = get_sum(['seo站内流量'], filtered_cols_2) if filtered_cols_2 else 0
+        comp_site_total = get_sum(['网站总流量'], filtered_cols_2) if filtered_cols_2 else 0
         
-        c_google_index = get_asset_latest(['收录'], fc2) if fc2 else 0
-        c_google_backlinks = get_asset_latest(['外链'], fc2) if fc2 else 0
-        c_google_domain = get_asset_latest(['外链域名广度'], fc2) if fc2 else 0
+        comp_bounce_rate = 0.0
+        if not bounce_data.empty and filtered_cols_2:
+            valid_br_cols_c = [c for c in filtered_cols_2 if c in bounce_data.columns]
+            if valid_br_cols_c:
+                br_vals_c = bounce_data[valid_br_cols_c].iloc[0].astype(str).str.replace('%', '', regex=False)
+                br_series_c = pd.to_numeric(br_vals_c, errors='coerce').dropna()
+                if not br_series_c.empty: comp_bounce_rate = br_series_c.mean()
+
+        comp_ga4_sales = get_sum(['ga4seo销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
+        comp_super_sales = get_sum(['supersetseo销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
+        comp_ai_sales = get_sum(['aiassistant销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
+        comp_ai_traffic = get_sum(['aiassistant流量'], filtered_cols_2) if filtered_cols_2 else 0
+        comp_google_index = get_latest('收录', filtered_cols_2) if filtered_cols_2 else 0
+        comp_google_backlinks = get_latest('外链', filtered_cols_2) if filtered_cols_2 else 0
+        comp_google_domain = get_latest('外链域名广度', filtered_cols_2) if filtered_cols_2 else 0
+
+        def format_cmp(v1, v2, is_curr=False, is_pct=False, inverse=False, dark_bg=False):
+            if not enable_compare: return ""
+            if v2 == 0 and v1 > 0: pct = 999999
+            elif v2 == 0 and v1 == 0: pct = 0
+            else: pct = ((v1 - v2) / v2) * 100
+            v2_str = f"$ {v2:,.2f}" if is_curr else (f"{v2:.2f}%" if is_pct else f"{v2:,.0f}")
+            if pct == 0: c, arr, p_str = "#8E8CA7", "", "0.0%"
+            else:
+                c = "#22C55E" if (pct > 0 and not inverse) or (pct < 0 and inverse) else "#FF6475"
+                arr = "↑" if pct > 0 else "↓"
+                p_str = f"{abs(pct):.1f}%" if pct != 999999 else "+∞%"
+            vs_c = "rgba(255,255,255,0.7)" if dark_bg else "#8E8CA7"
+            return f"<div style='font-size:13px; color:{vs_c}; font-weight:500; margin-top:4px;'>vs {v2_str} <span style='color:{c}; font-weight:700; margin-left:4px;'>{arr} {p_str}</span></div>"
 
         st.markdown(f"""
-<div class="soft-card"><h4 class="text-main" style="margin: 0 0 24px 0; display: flex; align-items: center;"><div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-filter"></i></div> Traffic Funnel Health</h4><div style="display: flex; justify-content: space-between; border-bottom: 2px dashed #F0F1F6; padding-bottom: 24px;">
-<div class="funnel-item" style="padding-left: 0;"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p><p class="funnel-value">{i_trf:,.0f}</p>{f_cmp(i_trf, c_trf)}</div>
-<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p><p class="funnel-value">{i_blg:,.0f}</p>{f_cmp(i_blg, c_blg)}</div>
-<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p><p class="funnel-value">{i_ins:,.0f}</p>{f_cmp(i_ins, c_ins)}</div>
-<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p><p class="funnel-value">{i_sit:,.0f}</p>{f_cmp(i_sit, c_sit)}</div>
-<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p><p class="funnel-value">{i_br:.2f}%</p>{f_cmp(i_br, c_br, False, True, True)}</div>
-</div></div>
-<div class="soft-card"><h4 class="text-main" style="margin: 0 0 24px 0; display: flex; align-items: center;"><div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-sack-dollar"></i></div> Sales Breakdown</h4><div style="display: flex; gap: 20px;">
-<div class="inner-box box-deep" style="text-align: center;"><p class="box-label" style="justify-content: center; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales</p><p class="box-value-white">$ {i_ga4:,.2f}</p>{f_cmp(i_ga4, c_ga4, True, False, False, True)}</div>
-<div class="inner-box box-light" style="text-align: center;"><p class="box-label text-muted" style="justify-content: center;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p><p class="box-value-dark">$ {i_sup:,.2f}</p>{f_cmp(i_sup, c_sup, True)}</div>
-</div></div>
+<div class="soft-card">
+<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;"><div class="icon-small bg-blue flex-center" style="justify-content:center;"><i class="fa-solid fa-filter"></i></div> Traffic Funnel Health</h4>
+<div style="display: flex; justify-content: space-between; border-bottom: 2px dashed #F0F1F6; padding-bottom: 24px; margin-bottom: 18px;">
+<div class="funnel-item" style="padding-left: 0;"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#2D235C;"></i> SEO 流量</p><p class="funnel-value" style="margin: 0;">{int_traffic:,.0f}</p>{format_cmp(int_traffic, comp_traffic)}</div>
+<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#42D2E6;"></i> SEO Blog 流量</p><p class="funnel-value" style="margin: 0;">{int_blog:,.0f}</p>{format_cmp(int_blog, comp_blog)}</div>
+<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FF6475;"></i> SEO 站内流量</p><p class="funnel-value" style="margin: 0;">{int_insite:,.0f}</p>{format_cmp(int_insite, comp_insite)}</div>
+<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#FFB000;"></i> 网站总流量</p><p class="funnel-value" style="margin: 0;">{int_site_total:,.0f}</p>{format_cmp(int_site_total, comp_site_total)}</div>
+<div class="funnel-item"><p class="funnel-title"><i class="fa-solid fa-circle funnel-dot" style="color:#8E8CA7;"></i> 跳出率</p><p class="funnel-value" style="margin: 0;">{int_bounce_rate:.2f}%</p>{format_cmp(int_bounce_rate, comp_bounce_rate, is_pct=True, inverse=True)}</div>
+</div>
+<p class="text-muted" style="font-size: 12px; margin: 0;">✦ Real-time data mapped for Callie DE.</p>
+</div>
 """, unsafe_allow_html=True)
         
-        ca, cg = st.columns(2)
-        with ca:
-            st.markdown(f'<div class="soft-card" style="height: 100%;"><p style="margin-bottom:12px; font-weight:700;"><span class="icon-small bg-purple flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-solid fa-robot"></i></span> AI Assistant</p><div style="display: flex; margin-top:16px;"><div class="inner-box box-deep"><p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p><p class="box-value-white">$ {i_ais:,.2f}</p>{f_cmp(i_ais, c_ais, True, False, False, True)}</div><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p><p class="box-value-dark">{i_ait:,.0f}</p>{f_cmp(i_ait, c_ait)}</div></div></div>', unsafe_allow_html=True)
-        with cg:
-            st.markdown(f'<div class="soft-card" style="height: 100%;"><p style="margin-bottom:12px; font-weight:700;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p><div style="display: flex; margin-top:16px;"><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p><p class="box-value-dark">{google_index:,.0f}</p>{f_cmp(google_index, c_google_index)}</div><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark">{google_backlinks:,.0f}</p>{f_cmp(google_backlinks, c_google_backlinks)}</div><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark">{google_domain:,.0f}</p>{f_cmp(google_domain, c_google_domain)}</div></div></div>', unsafe_allow_html=True)
-
-        # ==========================================
-        # 6. 单一图表模块 (严格使用 draw_trend_simple，杜绝报错)
-        # ==========================================
-        st.markdown('<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; border-radius: 16px;"><div class="flex-center"><div class="icon-small bg-red flex-center" style="justify-content:center; margin-bottom: 0;"><i class="fa-solid fa-chart-area"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span></div></div>', unsafe_allow_html=True)
-        ss = st.multiselect("Sales", ['GA4 SEO销售额', 'Superset SEO销售额', 'AI Assistant 销售额'], default=['GA4 SEO销售额'], label_visibility="collapsed")
-        fs = go.Figure()
-        sc = {'GA4 SEO销售额': '#FF6475', 'Superset SEO销售额': '#FFB000', 'AI Assistant 销售额': '#8B5CF6'}
-        for m in ss:
-            k = 'ga4seo销售额' if m == 'GA4 SEO销售额' else ('aiassistant销售额' if m == 'AI Assistant 销售额' else 'supersetseo销售额')
-            d1_a, v1 = get_agg_series(df_de, [k], fc1, freq)
-            draw_trend_simple(fs, d1_a, v1, f"{m} (Pri)" if en_cmp else m, sc[m], False, True)
-            if en_cmp:
-                d2_a, v2 = get_agg_series(df_de, [k], fc2, freq)
-                draw_trend_simple(fs, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", sc[m], True, False)
-        apply_layout(fs, "$"); st.plotly_chart(fs, use_container_width=True)
+        st.markdown(f"""
+<div class="soft-card">
+<h4 class="text-main" style="margin-top: 0; margin-bottom: 24px; display: flex; align-items: center; font-size:18px;"><div class="icon-small bg-red flex-center" style="justify-content:center;"><i class="fa-solid fa-sack-dollar"></i></div> Sales Breakdown (Selected Interval)</h4>
+<div style="display: flex; gap: 20px;">
+<div class="inner-box box-deep" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;"><p class="box-label" style="justify-content: center; margin-bottom: 8px; color:rgba(255,255,255,0.9);"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> GA4 SEO Sales (Primary Source)</p><p class="box-value-white" style="font-size: 36px; margin: 0;">$ {int_ga4_sales:,.2f}</p>{format_cmp(int_ga4_sales, comp_ga4_sales, is_curr=True, dark_bg=True)}</div>
+<div class="inner-box box-light" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;"><p class="box-label text-muted" style="justify-content: center; margin-bottom: 8px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Superset SEO Sales</p><p class="box-value-dark" style="font-size: 36px; margin: 0;">$ {int_super_sales:,.2f}</p>{format_cmp(int_super_sales, comp_super_sales, is_curr=True)}</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
         
-        st.markdown('<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;"><div class="flex-center"><div class="icon-small bg-blue flex-center" style="justify-content:center; margin-bottom: 0;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span></div></div>', unsafe_allow_html=True)
-        stt = st.multiselect("Traffic", ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量', 'AI Assistant 流量'], default=['SEO流量'], label_visibility="collapsed")
-        ft = go.Figure()
-        tc = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000', 'AI Assistant 流量': '#8B5CF6'}
-        for m in stt:
-            k = 'seoblog流量' if m == 'SEO Blog 流量' else ('seo站内流量' if m == 'SEO 站内流量' else clean_str(m))
-            d1_a, v1 = get_agg_series(df_de, [k], fc1, freq)
-            draw_trend_simple(ft, d1_a, v1, f"{m} (Pri)" if en_cmp else m, tc[m], False, True)
-            if en_cmp:
-                d2_a, v2 = get_agg_series(df_de, [k], fc2, freq)
-                draw_trend_simple(ft, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", tc[m], True, False)
-        apply_layout(ft); st.plotly_chart(ft, use_container_width=True)
-
-        if dc_gsc and not df_gsc.empty:
-            gsc_metrics = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
-            gsc_c = ['#FF6475', '#42D2E6', '#FFB000', '#8B5CF6', '#2D235C', '#10B981']
+        col_ai, col_google = st.columns(2)
+        with col_ai:
+            st.markdown(f"""
+<div class="soft-card" style="height: 100%;">
+<p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-purple flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-solid fa-robot"></i></span> AI Assistant</p>
+<div style="display: flex; margin-top:16px;">
+<div class="inner-box box-deep"><p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p><p class="box-value-white" style="margin: 0;">$ {ai_sales:,.2f}</p>{format_cmp(ai_sales, comp_ai_sales, is_curr=True, dark_bg=True)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p><p class="box-value-dark" style="margin: 0;">{ai_traffic:,.0f}</p>{format_cmp(ai_traffic, comp_ai_traffic)}</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
             
-            html = '<div class="soft-card"><h4 class="text-main" style="margin: 0 0 24px 0; display: flex; align-items: center;"><div class="icon-small bg-orange flex-center" style="justify-content:center;"><i class="fa-brands fa-google"></i></div> GSC Clicks Breakdown (Selected Interval)</h4><div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">'
-            for idx, m in enumerate(gsc_metrics):
-                _, v1 = get_agg_series(df_gsc, [m], d_g1, 'M', is_row_based=False)
-                _, v2 = get_agg_series(df_gsc, [m], d_g2, 'M', is_row_based=False) if en_cmp else ([], [0])
-                s1, s2 = sum(v1) if v1 else 0, sum(v2) if v2 else 0
-                html += f'<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:{gsc_c[idx]}; font-size:8px; margin-right:8px;"></i> {m}</p><p class="box-value-dark">{s1:,.0f}</p>{f_cmp(s1, s2)}</div>'
-            st.markdown(html + '</div></div>', unsafe_allow_html=True)
+        with col_google:
+            st.markdown(f"""
+<div class="soft-card" style="height: 100%;">
+<p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p>
+<div style="display: flex; margin-top:16px;">
+<div class="inner-box box-light" style="flex: 1.2;"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p><p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>{format_cmp(google_index, c_google_index)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>{format_cmp(google_backlinks, c_google_backlinks)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>{format_cmp(google_domain, c_google_domain)}</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
+
+        # ==========================================
+        # 6. 图表模块 - 完全避开参数冲突
+        # ==========================================
+        def get_trend_series(possible_names, cols, is_curr=False):
+            if isinstance(possible_names, str): possible_names = [possible_names]
+            data = pd.DataFrame()
+            for p in possible_names:
+                target = p.replace(' ', '').lower()
+                matched = df_de[df_de['Metric_Norm'] == target]
+                if data.empty: matched = df_de[df_de['Metric_Norm'].str.contains(target, na=False)]
+                if not matched.empty:
+                    data = matched
+                    break
+            if not data.empty and cols:
+                valid_cols = [c for c in cols if c in data.columns]
+                if valid_cols:
+                    vals = data[valid_cols].iloc[0].astype(str).str.replace(',', '', regex=False)
+                    if is_curr: vals = vals.str.replace('$', '', regex=False)
+                    return pd.to_numeric(vals, errors='coerce').fillna(0).tolist()
+            return []
+
+        sales_metrics_options = ['GA4 SEO销售额', 'Superset SEO销售额', 'AI Assistant 销售额']
+        sales_colors = {'GA4 SEO销售额': '#FF6475', 'Superset SEO销售额': '#FFB000', 'AI Assistant 销售额': '#8B5CF6'}
+        traffic_metrics_options = ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量', 'AI Assistant 流量']
+        traffic_colors = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000', 'AI Assistant 流量': '#8B5CF6'}
+        
+        font_style = dict(family="Poppins, sans-serif", color="#8E8CA7")
+        dates1 = [str(d) for d in pd.date_range(start_d1, end_d1)]
+        dates2 = [str(d) for d in pd.date_range(start_d2, end_d2)] if enable_compare and start_d2 else []
+        
+        # --- Sales Chart (单轴专属画笔) ---
+        st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-red flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-chart-area"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+        selected_sales_metrics = st.multiselect("Select Sales Metrics", sales_metrics_options, default=['GA4 SEO销售额'], label_visibility="collapsed", key="sales_sel")
+        
+        fig_sales = go.Figure()
+        if selected_sales_metrics:
+            for metric in selected_sales_metrics:
+                color = sales_colors[metric]
+                k = 'ga4seo销售额' if metric == 'GA4 SEO销售额' else ('aiassistant销售额' if metric == 'AI Assistant 销售额' else 'supersetseo销售额')
+                
+                s_raw1 = get_trend_series([k], filtered_cols_1, True)
+                d_agg1, s_trend1 = aggregate_trend(dates1, s_raw1, freq, 'sum')
+                
+                if not enable_compare:
+                    fig_sales.add_trace(go.Scatter(x=d_agg1, y=s_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                else:
+                    s_raw2 = get_trend_series([k], filtered_cols_2, True) if filtered_cols_2 else []
+                    _, s_trend2 = aggregate_trend(dates2, s_raw2, freq, 'sum') if s_raw2 else ([], [])
+                    
+                    max_len = max(len(s_trend1), len(s_trend2))
+                    prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                    x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+                    
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
             
-            sm = st.multiselect("GSC Trends", gsc_metrics, default=['点击（GSC）'], label_visibility="collapsed")
-            fg = go.Figure()
-            for m in sm:
-                idx = gsc_metrics.index(m)
-                d1_a, v1 = get_agg_series(df_gsc, [m], d_g1, freq, is_row_based=False)
-                draw_trend_simple(fg, d1_a, v1, f"{m} (Pri)" if en_cmp else m, gsc_c[idx], False, True)
-                if en_cmp:
-                    d2_a, v2 = get_agg_series(df_gsc, [m], d_g2, freq, is_row_based=False)
-                    draw_trend_simple(fg, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", gsc_c[idx], True, False)
-            apply_layout(fg); st.plotly_chart(fg, use_container_width=True)
+        fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
+        st.plotly_chart(fig_sales, use_container_width=True)
+        
+        # --- Traffic Chart (单轴专属画笔) ---
+        st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-blue flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-chart-line"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+        selected_traffic_metrics = st.multiselect("Select Traffic Metrics", traffic_metrics_options, default=['SEO流量'], label_visibility="collapsed", key="traf_sel")
+        
+        fig_traffic = go.Figure()
+        if selected_traffic_metrics:
+            for metric in selected_traffic_metrics:
+                color = traffic_colors[metric]
+                k = 'seoblog流量' if metric == 'SEO Blog 流量' else ('seo站内流量' if metric == 'SEO 站内流量' else clean_str(metric))
+                
+                t_raw1 = get_trend_series([k], filtered_cols_1)
+                d_agg1, t_trend1 = aggregate_trend(dates1, t_raw1, freq, 'sum')
+                
+                if not enable_compare:
+                    fig_traffic.add_trace(go.Scatter(x=d_agg1, y=t_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                else: 
+                    t_raw2 = get_trend_series([k], filtered_cols_2) if filtered_cols_2 else []
+                    _, t_trend2 = aggregate_trend(dates2, t_raw2, freq, 'sum') if t_raw2 else ([], [])
+                    
+                    max_len = max(len(t_trend1), len(t_trend2))
+                    prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                    x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+                    
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
 
-            g_tabs = st.tabs(gsc_metrics)
-            for i, tb in enumerate(g_tabs):
-                with tb:
-                    m = gsc_metrics[i]
-                    f1 = make_subplots(specs=[[{"secondary_y": True}]])
-                    d1_a, v1_c = get_agg_series(df_gsc, [f"{m}_点击"], d_g1, freq, is_row_based=False)
-                    _, v1_i = get_agg_series(df_gsc, [f"{m}_展示"], d_g1, freq, is_row_based=False)
-                    draw_trend_dual(f1, d1_a, v1_c, "点击次数 (Pri)" if en_cmp else "点击次数", '#42D2E6', False, False, False, sec_y=False)
-                    draw_trend_dual(f1, d1_a, v1_i, "展示 (Pri)" if en_cmp else "展示", '#FF6475', False, False, False, sec_y=True)
-                    if en_cmp:
-                        d2_a, v2_c = get_agg_series(df_gsc, [f"{m}_点击"], d_g2, freq, is_row_based=False)
-                        _, v2_i = get_agg_series(df_gsc, [f"{m}_展示"], d_g2, freq, is_row_based=False)
-                        xa = [f"P {j+1}" for j in range(max(len(v1_c), len(v2_c)))] if freq=='D' else d2_a
-                        draw_trend_dual(f1, xa, v2_c, "点击次数 (Cmp)", '#8E8CA7', True, False, False, sec_y=False)
-                        draw_trend_dual(f1, xa, v2_i, "展示 (Cmp)", 'rgba(255,100,117,0.5)', True, False, False, sec_y=True)
-                    apply_layout(f1); st.plotly_chart(f1, use_container_width=True)
+        fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
+        st.plotly_chart(fig_traffic, use_container_width=True)
 
-                    f2 = make_subplots(specs=[[{"secondary_y": True}]])
-                    d1_a, v1_ct = get_agg_series(df_gsc, [f"{m}_点击率"], d_g1, freq, 'mean', False)
-                    _, v1_po = get_agg_series(df_gsc, [f"{m}_排名"], d_g1, freq, 'mean', False)
-                    draw_trend_dual(f2, d1_a, v1_ct, "点击率 (%) (Pri)" if en_cmp else "点击率 (%)", '#22C55E', sec_y=False)
-                    draw_trend_dual(f2, d1_a, v1_po, "排名 (Pri)" if en_cmp else "排名", '#8B5CF6', False, False, False, sec_y=True, is_dot_line=True)
-                    if en_cmp:
-                        d2_a, v2_ct = get_agg_series(df_gsc, [f"{m}_点击率"], d_g2, freq, 'mean', False)
-                        _, v2_po = get_agg_series(df_gsc, [f"{m}_排名"], d_g2, freq, 'mean', False)
-                        xa = [f"P {j+1}" for j in range(max(len(v1_ct), len(v2_ct)))] if freq=='D' else d2_a
-                        draw_trend_dual(f2, xa, v2_ct, "点击率 (Cmp)", 'rgba(34,197,94,0.5)', True, False, False, sec_y=False)
-                        draw_trend_dual(f2, xa, v2_po, "排名 (Cmp)", 'rgba(139,92,246,0.5)', True, False, False, sec_y=True, is_dot_line=True)
-                    apply_layout(f2); f2.update_yaxes(autorange="reversed", secondary_y=True); st.plotly_chart(f2, use_container_width=True)
-
-        if dc_ai and not df_ai.empty:
-            ai_c = [("AI Performance（GSC）", ['aiperformance(gsc)'], '#8B5CF6'), ("AI Performance（非Blog）", ['aiperformance(非blog)'], '#42D2E6'), ("AI Performance（Blog）", ['aiperformance(blog)'], '#FF6475')]
-            h_ai = '<div class="soft-card"><h4 class="text-main" style="margin: 0 0 24px 0; display: flex; align-items: center;"><div class="icon-small bg-purple flex-center" style="justify-content:center;"><i class="fa-solid fa-microchip"></i></div> AI Performance Breakdown (Selected Interval)</h4><div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">'
-            for nm, k, cx in ai_c:
-                _, v1 = get_agg_series(df_ai, k, d_g1, 'M', is_row_based=False)
-                _, v2 = get_agg_series(df_ai, k, d_g2, 'M', is_row_based=False) if en_cmp else ([], [0])
-                s1, s2 = sum(v1) if v1 else 0, sum(v2) if v2 else 0
-                h_ai += f'<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:{cx}; font-size:8px; margin-right:8px;"></i> {nm}</p><p class="box-value-dark">{s1:,.0f}</p>{f_cmp(s1, s2)}</div>'
-            st.markdown(h_ai + '</div></div>', unsafe_allow_html=True)
+        # ==========================================
+        # 7. GSC Performance Breakdown 
+        # ==========================================
+        if date_col_gsc and not df_gsc.empty:
+            st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-orange flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-brands fa-google"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">GSC Performance Breakdown</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
             
-            sai = st.multiselect("AI Trends", [c for c in df_ai.columns if c!=dc_ai], default=[df_ai.columns[1]], label_visibility="collapsed")
-            fai = go.Figure()
-            cols = ['#8B5CF6', '#42D2E6', '#FF6475', '#FFB000', '#22C55E']
-            for idx, m in enumerate(sai):
-                cc = cols[idx%len(cols)]
-                d1_a, v1 = get_agg_series(df_ai, [m], d_g1, freq, is_row_based=False)
-                draw_trend_simple(fai, d1_a, v1, f"{m} (Pri)" if en_cmp else m, cc, False, True)
-                if en_cmp:
-                    d2_a, v2 = get_agg_series(df_ai, [m], d_g2, freq, is_row_based=False)
-                    draw_trend_simple(fai, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", cc, True, False)
-            apply_layout(fai); st.plotly_chart(fai, use_container_width=True)
+            def clean_gsc(s):
+                if pd.isna(s): return 0
+                return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
 
-        # Raw Table
-        st.markdown('<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom: 0;"><i class="fa-solid fa-database"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Raw Data Matrix (Callie DE)</span></div></div>', unsafe_allow_html=True)
-        d_dsp = df_de[['Metric'] + fc1].copy(); d_dsp.columns = ['Metric'] + [str(d) for d in pd.date_range(sd1, ed1)]; st.dataframe(d_dsp.set_index('Metric'), use_container_width=True, height=350)
+            def get_gsc_clicks_series(df_source, seg):
+                if df_source.empty: return []
+                c_clk = f"{seg}_点击次数"
+                if c_clk not in df_source.columns:
+                    c_clk = f"{seg}_点击" 
+                if c_clk not in df_source.columns:
+                    for c in df_source.columns:
+                        if clean_str(seg) in clean_str(c) and '点击' in clean_str(c):
+                            c_clk = c
+                            break
+                if c_clk in df_source.columns:
+                    return df_source[c_clk].apply(clean_gsc).fillna(0).tolist()
+                return []
+
+            gsc_segments = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
+            gsc_trend_colors = {
+                '点击（GSC）': '#2D235C',
+                '点击（非品牌词点击）': '#42D2E6',
+                '点击（Blog）': '#FF6475',
+                '点击（非Blog）': '#FFB000',
+                '点击（非品牌词非Blog）': '#8B5CF6',
+                '点击（非品牌词非Blog非utm）': '#10B981'
+            }
             
+            st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
+            selected_gsc_metrics = st.multiselect("Select GSC Metrics", gsc_segments, default=['点击（GSC）'], label_visibility="collapsed", key="gsc_trend_sel")
+            
+            # --- GSC Clicks Trend (单轴专属画笔) ---
+            fig_gsc_trend = go.Figure()
+            if selected_gsc_metrics and not df_gsc_1.empty:
+                for metric in selected_gsc_metrics:
+                    color = gsc_trend_colors[metric]
+                    y_gsc1_raw = get_gsc_clicks_series(df_gsc_1, metric)
+                    d_agg1, y_gsc1 = aggregate_trend(dates_g1, y_gsc1_raw, freq, 'sum')
+                    
+                    if not enable_compare:
+                        fig_gsc_trend.add_trace(go.Scatter(x=d_agg1, y=y_gsc1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    else:
+                        y_gsc2_raw = get_gsc_clicks_series(df_gsc_2, metric) if not df_gsc_2.empty else []
+                        _, y_gsc2 = aggregate_trend(dates_g2, y_gsc2_raw, freq, 'sum') if y_gsc2_raw else ([], [])
+                        
+                        max_len = max(len(y_gsc1), len(y_gsc2))
+                        prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                        x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+                        
+                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc1)], y=y_gsc1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
+                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc2)], y=y_gsc2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
+                
+                fig_gsc_trend.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
+                st.plotly_chart(fig_gsc_trend, use_container_width=True)
+            elif df_gsc_1.empty:
+                st.info("所选时间段暂无 GSC 数据。")
+            
+            # --- GSC Detailed Tabs (双轴专属画板 make_subplots) ---
+            gsc_tabs = st.tabs(gsc_segments)
+                
+            for i, tab in enumerate(gsc_tabs):
+                with tab:
+                    seg = gsc_segments[i]
+                    c_clk = f"{seg}_点击次数"
+                    c_imp = f"{seg}_展示"
+                    c_ctr = f"{seg}_点击率"
+                    c_pos = f"{seg}_排名"
+                    
+                    avail_cols = list(df_gsc.columns)
+                    if c_clk not in avail_cols: c_clk = avail_cols[1] if len(avail_cols)>1 else avail_cols[-1]
+                    if c_imp not in avail_cols: c_imp = avail_cols[2] if len(avail_cols)>2 else avail_cols[-1]
+                    if c_ctr not in avail_cols: c_ctr = avail_cols[3] if len(avail_cols)>3 else avail_cols[-1]
+                    if c_pos not in avail_cols: c_pos = avail_cols[4] if len(avail_cols)>4 else avail_cols[-1]
+                    
+                    with st.expander(f"⚙️ 数据列校准 (如当前无数据，请点此手动指定列)"):
+                        c1, c2, c3, c4 = st.columns(4)
+                        with c1: c_clk = st.selectbox("点击次数 (Clicks)", avail_cols, index=avail_cols.index(c_clk), key=f"clk_{i}")
+                        with c2: c_imp = st.selectbox("展示 (Impressions)", avail_cols, index=avail_cols.index(c_imp), key=f"imp_{i}")
+                        with c3: c_ctr = st.selectbox("点击率 (CTR)", avail_cols, index=avail_cols.index(c_ctr), key=f"ctr_{i}")
+                        with c4: c_pos = st.selectbox("排名 (Position)", avail_cols, index=avail_cols.index(c_pos), key=f"pos_{i}")
+                        
+                    if not df_gsc_1.empty:
+                        y_clk1_raw = df_gsc_1[c_clk].apply(clean_gsc).fillna(0).tolist()
+                        y_imp1_raw = df_gsc_1[c_imp].apply(clean_gsc).fillna(0).tolist()
+                        y_ctr1_raw = df_gsc_1[c_ctr].apply(clean_gsc).fillna(0).tolist()
+                        y_pos1_raw = df_gsc_1[c_pos].apply(clean_gsc).fillna(0).tolist()
+
+                        d_agg1, y_clk1 = aggregate_trend(dates_g1, y_clk1_raw, freq, 'sum')
+                        _, y_imp1 = aggregate_trend(dates_g1, y_imp1_raw, freq, 'sum')
+                        _, y_ctr1 = aggregate_trend(dates_g1, y_ctr1_raw, freq, 'mean')
+                        _, y_pos1 = aggregate_trend(dates_g1, y_pos1_raw, freq, 'mean')
+
+                        if not enable_compare:
+                            fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
+                            fig_g1.add_trace(go.Bar(x=d_agg1, y=y_clk1, name="点击次数", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
+                            fig_g1.add_trace(go.Scatter(x=d_agg1, y=y_imp1, mode='lines+markers', name="展示", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
+                            
+                            fig_g1.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=280, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
+                            fig_g1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                            fig_g1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
+                            st.plotly_chart(fig_g1, use_container_width=True)
+                            
+                            fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
+                            fig_g2.add_trace(go.Scatter(x=d_agg1, y=y_ctr1, mode='lines+markers', name="点击率 (%)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
+                            fig_g2.add_trace(go.Scatter(x=d_agg1, y=y_pos1, mode='lines+markers', name="排名", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
+                            
+                            fig_g2.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=280, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
+                            fig_g2.update_yaxes(autorange="reversed", secondary_y=True) 
+                            fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                            fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
+                            st.plotly_chart(fig_g2, use_container_width=True)
+                        else:
+                            y_clk2_raw = df_gsc_2[c_clk].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
+                            y_imp2_raw = df_gsc_2[c_imp].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
+                            y_ctr2_raw = df_gsc_2[c_ctr].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
+                            y_pos2_raw = df_gsc_2[c_pos].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
+                            
+                            _, y_clk2 = aggregate_trend(dates_g2, y_clk2_raw, freq, 'sum') if y_clk2_raw else ([], [])
+                            _, y_imp2 = aggregate_trend(dates_g2, y_imp2_raw, freq, 'sum') if y_imp2_raw else ([], [])
+                            _, y_ctr2 = aggregate_trend(dates_g2, y_ctr2_raw, freq, 'mean') if y_ctr2_raw else ([], [])
+                            _, y_pos2 = aggregate_trend(dates_g2, y_pos2_raw, freq, 'mean') if y_pos2_raw else ([], [])
+
+                            max_len = max(len(y_clk1), len(y_clk2))
+                            prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                            x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+
+                            fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
+                            fig_g1.add_trace(go.Bar(x=x_axis[:len(y_clk1)], y=y_clk1, name="点击次数 (Pri)", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
+                            fig_g1.add_trace(go.Bar(x=x_axis[:len(y_clk2)], y=y_clk2, name="点击次数 (Cmp)", marker=dict(color='rgba(142, 140, 167, 0.3)', line=dict(color='#8E8CA7', width=2))), secondary_y=False)
+                            fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_imp1)], y=y_imp1, mode='lines+markers', name="展示 (Pri)", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
+                            fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_imp2)], y=y_imp2, mode='lines+markers', name="展示 (Cmp)", line=dict(color='rgba(255, 100, 117, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=True)
+
+                            fig_g1.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=280, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
+                            fig_g1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                            fig_g1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
+                            st.plotly_chart(fig_g1, use_container_width=True)
+                            
+                            fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
+                            fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr1)], y=y_ctr1, mode='lines+markers', name="点击率 (Pri)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
+                            fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr2)], y=y_ctr2, mode='lines+markers', name="点击率 (Cmp)", line=dict(color='rgba(34, 197, 94, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=False)
+                            fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos1)], y=y_pos1, mode='lines+markers', name="排名 (Pri)", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
+                            fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos2)], y=y_pos2, mode='lines+markers', name="排名 (Cmp)", line=dict(color='rgba(139, 92, 246, 0.5)', width=2, dash='dash', shape='spline'), marker=dict(size=8)), secondary_y=True)
+
+                            fig_g2.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=280, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
+                            fig_g2.update_yaxes(autorange="reversed", secondary_y=True) 
+                            fig_g2.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
+                            fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
+                            st.plotly_chart(fig_g2, use_container_width=True)
+
+        # ==========================================
+        # 8. AI Performance Breakdown
+        # ==========================================
+        if date_col_ai and not df_ai.empty:
+            st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 20px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-purple flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-microchip"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">AI Performance Breakdown</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+            
+            st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
+            ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
+            selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
+            
+            # --- AI Perf Chart (单轴专属画笔) ---
+            fig_ai = go.Figure()
+            if selected_ai_metrics and not df_ai_1.empty:
+                colors = ['#8B5CF6', '#42D2E6', '#FF6475', '#FFB000', '#22C55E']
+                for idx, metric in enumerate(selected_ai_metrics):
+                    c_color = colors[idx % len(colors)]
+                    
+                    def clean_ai(s):
+                        if pd.isna(s): return 0
+                        return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
+                    
+                    y_ai1_raw = df_ai_1[metric].apply(clean_ai).fillna(0).tolist()
+                    d_agg1, y_ai1 = aggregate_trend(dates_a1, y_ai1_raw, freq, 'sum')
+                    
+                    if not enable_compare:
+                        fig_ai.add_trace(go.Scatter(x=d_agg1, y=y_ai1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
+                    else:
+                        y_ai2_raw = df_ai_2[metric].apply(clean_ai).fillna(0).tolist() if not df_ai_2.empty else []
+                        _, y_ai2 = aggregate_trend(dates_a2, y_ai2_raw, freq, 'sum') if y_ai2_raw else ([], [])
+                        
+                        max_len = max(len(y_ai1), len(y_ai2))
+                        prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                        x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+                        
+                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai1)], y=y_ai1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white'))))
+                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai2)], y=y_ai2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=c_color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
+                
+                fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
+                st.plotly_chart(fig_ai, use_container_width=True)
+            elif df_ai_1.empty:
+                st.info("所选时间段暂无 AI Performance 数据。")
+
+        # ==========================================
+        # 10. Raw Tables
+        # ==========================================
+        st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-gray flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-database"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Raw Data Matrix (Callie DE)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+        df_display = df_de[['Metric'] + fc1].copy()
+        df_display.columns = ['Metric'] + [str(d) for d in pd.date_range(start_d1, end_d1)]
+        df_display = df_display.set_index('Metric')
+        st.dataframe(df_display, use_container_width=True, height=350)
+        
+        if date_col_gsc and not df_gsc.empty:
+            st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-gray flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-brands fa-google"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Raw Data Matrix (GSC)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+            st.dataframe(df_gsc_1, use_container_width=True, height=350)
+            
+        if date_col_ai and not df_ai.empty:
+            st.markdown("""
+<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
+    <div class="flex-center">
+        <div class="icon-small bg-gray flex-center" style="justify-content:center; margin-bottom: 0;">
+            <i class="fa-solid fa-microchip"></i>
+        </div>
+        <span class="text-main" style="font-weight:700; font-size:16px;">Raw Data Matrix (AI Performance)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+            st.dataframe(df_ai_1, use_container_width=True, height=350)
+
 except Exception as e:
     st.error("Error occurred during rendering:")
     st.write(e)
