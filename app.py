@@ -381,6 +381,114 @@ try:
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
+        # ⭐ Annual Trends (YoY Overview) - 全局免筛选时间
+        # ==========================================
+        st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-solid fa-chart-line"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Annual Trends (YoY Overview)</h3></div>', unsafe_allow_html=True)
+        st.caption("Auto-aggregated monthly trends comparing 2026 vs 2025 across all available data.")
+        
+        def hex_to_rgba(hex_color, alpha=0.1):
+            hex_color = hex_color.lstrip('#')
+            return f"rgba({int(hex_color[0:2],16)}, {int(hex_color[2:4],16)}, {int(hex_color[4:6],16)}, {alpha})"
+
+        def get_yoy_data(key_words, y, is_gsc=False):
+            res = {str(m):0.0 for m in range(1,13)}
+            last_valid_month = 12
+            if y == current_year:
+                last_valid_month = current_month - 1 if current_month > 1 else 1
+
+            def clean_val_yoy(s):
+                if pd.isna(s): return 0
+                return pd.to_numeric(str(s).replace(',', '').replace('$', '').replace('%', ''), errors='coerce')
+
+            if is_gsc:
+                if df_gsc is None or df_gsc.empty or not date_col_gsc: return []
+                c_tgt = ""
+                for c in df_gsc.columns:
+                    c_clean = str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower()
+                    kw_clean = str(key_words).replace(' ', '').replace('（', '(').replace('）', ')').lower()
+                    if kw_clean in c_clean and '点击' in c_clean:
+                        c_tgt = c
+                        break
+                if not c_tgt: return []
+                
+                df_t = df_gsc[pd.to_datetime(df_gsc[date_col_gsc]).dt.year == y].copy()
+                if df_t.empty: return []
+                df_t['m'] = pd.to_datetime(df_t[date_col_gsc]).dt.month
+                
+                grp = df_t.groupby('m')[c_tgt].apply(lambda x: x.apply(clean_val_yoy).sum()).to_dict()
+                for m, v in grp.items(): res[str(m)] = v
+            else:
+                data = pd.DataFrame()
+                for kw in str(key_words).split('|'):
+                    kw_clean = kw.replace(' ','').replace('（', '(').replace('）', ')').lower()
+                    matched = df_de[df_de['Metric_Norm'].str.contains(kw_clean, na=False)]
+                    if not matched.empty:
+                        data = matched
+                        break
+                if data.empty: return []
+                
+                for c in data.columns:
+                    if c not in ['Metric', 'Metric_Norm']:
+                        try:
+                            dt = pd.to_datetime(c)
+                            if dt.year == y:
+                                res[str(dt.month)] += clean_val_yoy(data[c].iloc[0])
+                        except: pass
+                        
+            vals = [res[str(m)] for m in range(1,13)]
+            if all(v == 0 or pd.isna(v) for v in vals): return []
+            
+            if is_gsc and y == 2025:
+                vals = [None, None, None, None] + vals[4:]
+            
+            if y < current_year:
+                last_m = 12
+                for i in range(11,-1,-1):
+                    if vals[i] is not None and vals[i] != 0: last_m=i+1; break
+                return vals[:last_m]
+            else:
+                return vals[:last_valid_month]
+
+        col_yoy_1, col_yoy_2 = st.columns(2)
+        month_labels = [f"{m}月" for m in range(1, 13)]
+        layout_yoy = dict(font=dict(family="Poppins", color="#8E8CA7"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=250, legend=dict(orientation="h", y=1.15, x=0.5, xanchor="center", itemwidth=50))
+        
+        with col_yoy_1:
+            st.markdown('<div class="soft-card" style="padding:16px 24px; margin-bottom:16px; border-radius:16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom:0;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700;">SEO 点击数据对比 (GSC 2026 vs 2025 YoY)</span></div></div>', unsafe_allow_html=True)
+            y_tbs = st.tabs(['站内点击走势 (非品牌词非Blog非utm)', 'GSC 总点击趋势', 'Blog 点击走势'])
+            y_ks = ['点击（非品牌词非Blog非utm）', '点击（GSC）', '点击（Blog）']
+            for i, tb in enumerate(y_tbs):
+                with tb:
+                    v25 = get_yoy_data(y_ks[i], 2025, True)
+                    v26 = get_yoy_data(y_ks[i], 2026, True)
+                    fy = go.Figure()
+                    if v25: fy.add_trace(go.Scatter(x=month_labels[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=10, color='#F59E0B', line=dict(width=2, color='white'))))
+                    if v26: fy.add_trace(go.Scatter(x=month_labels[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=10, color='#3B82F6', line=dict(width=2, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
+                    fy.update_layout(**layout_yoy); fy.update_xaxes(showgrid=True, gridcolor='#F0F1F6'); fy.update_yaxes(showgrid=True, gridcolor='#F0F1F6')
+                    st.plotly_chart(fy, use_container_width=True)
+        with col_yoy_2:
+            st.markdown('<div class="soft-card" style="padding:16px 24px; margin-bottom:16px; border-radius:16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom:0;"><i class="fa-solid fa-robot"></i></div><span class="text-main" style="font-weight:700;">AI Assistant 年度对比 (2026 vs 2025 YoY)</span></div></div>', unsafe_allow_html=True)
+            a_tbs = st.tabs(['AI 贡献销售额月度同比', 'AI 来源流量月度同比'])
+            with a_tbs[0]:
+                v25 = get_yoy_data('aiassistant销售额', 2025, False)
+                v26 = get_yoy_data('aiassistant销售额', 2026, False)
+                fa1 = go.Figure()
+                if v25: fa1.add_trace(go.Scatter(x=month_labels[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=10, color='#F59E0B', line=dict(width=2, color='white'))))
+                if v26: fa1.add_trace(go.Scatter(x=month_labels[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=10, color='#3B82F6', line=dict(width=2, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
+                fa1.update_layout(**layout_yoy); fa1.update_xaxes(showgrid=True, gridcolor='#F0F1F6'); fa1.update_yaxes(showgrid=True, gridcolor='#F0F1F6', tickprefix="$")
+                st.plotly_chart(fa1, use_container_width=True)
+            with a_tbs[1]:
+                v25 = get_yoy_data('aiassistant流量', 2025, False)
+                v26 = get_yoy_data('aiassistant流量', 2026, False)
+                fa2 = go.Figure()
+                if v25: fa2.add_trace(go.Scatter(x=month_labels[:len(v25)], y=v25, mode='lines+markers', name='2025年', line=dict(color='#F59E0B', width=3, shape='spline'), marker=dict(size=10, color='#F59E0B', line=dict(width=2, color='white'))))
+                if v26: fa2.add_trace(go.Scatter(x=month_labels[:len(v26)], y=v26, mode='lines+markers', name='2026年', line=dict(color='#3B82F6', width=3, shape='spline'), marker=dict(size=10, color='#3B82F6', line=dict(width=2, color='white')), fill='tozeroy', fillcolor=hex_to_rgba('#3B82F6', 0.1)))
+                fa2.update_layout(**layout_yoy); fa2.update_xaxes(showgrid=True, gridcolor='#F0F1F6'); fa2.update_yaxes(showgrid=True, gridcolor='#F0F1F6')
+                st.plotly_chart(fa2, use_container_width=True)
+
+        st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
+
+        # ==========================================
         # 4. 全局漏斗分析区间 (加入时间聚合引擎)
         # ==========================================
         valid_dates = list(date_mapping.values())
@@ -566,14 +674,14 @@ try:
                 if c_clk not in df_source.columns: c_clk = f"{seg}_点击" 
                 if c_clk not in df_source.columns:
                     for c in df_source.columns:
-                        if seg in c and ('点击' in c or 'click' in c.lower()):
+                        if str(seg).replace(' ', '').replace('（', '(').replace('）', ')').lower() in str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower() and ('点击' in c or 'click' in c.lower()):
                             c_clk = c
                             break
                 if c_clk not in df_source.columns: return 0.0
-                def clean_val(s):
+                def clean_val_local(s):
                     if pd.isna(s): return 0
                     return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
-                return df_source[c_clk].apply(clean_val).fillna(0).sum()
+                return df_source[c_clk].apply(clean_val_local).fillna(0).sum()
 
             gsc_html = ""
             gsc_html += '<div class="soft-card">\n'
@@ -658,7 +766,7 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细
+        # 6. 图表与明细 (严格遵循原生逻辑)
         # ==========================================
         def hex_to_rgba(hex_color, alpha=0.1):
             hex_color = hex_color.lstrip('#')
@@ -788,7 +896,7 @@ try:
                     c_clk = f"{seg}_点击" 
                 if c_clk not in df_source.columns:
                     for c in df_source.columns:
-                        if seg in c and ('点击' in c or 'click' in c.lower()):
+                        if str(seg).replace(' ', '').replace('（', '(').replace('）', ')').lower() in str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower() and ('点击' in c or 'click' in c.lower()):
                             c_clk = c
                             break
                 if c_clk in df_source.columns:
@@ -820,7 +928,7 @@ try:
                         fig_gsc_trend.add_trace(go.Scatter(x=d_agg1, y=y_gsc1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                     else:
                         y_gsc2_raw = get_gsc_clicks_series(df_gsc_2, metric) if not df_gsc_2.empty else []
-                        _, y_gsc2 = aggregate_trend(dates_g1 if df_gsc_2.empty else df_gsc_2[date_col_gsc].astype(str).tolist(), y_gsc2_raw, freq, 'sum') if y_gsc2_raw else ([], [])
+                        _, y_gsc2 = aggregate_trend(dates_g2, y_gsc2_raw, freq, 'sum') if y_gsc2_raw else ([], [])
                         
                         max_len = max(len(y_gsc1), len(y_gsc2))
                         prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
@@ -889,8 +997,6 @@ try:
                             fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                             st.plotly_chart(fig_g2, use_container_width=True)
                         else:
-                            dates_g2 = df_gsc_2[date_col_gsc].astype(str).tolist() if not df_gsc_2.empty else []
-                            
                             y_clk2_raw = df_gsc_2[c_clk].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
                             y_imp2_raw = df_gsc_2[c_imp].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
                             y_ctr2_raw = df_gsc_2[c_ctr].apply(clean_gsc).fillna(0).tolist() if not df_gsc_2.empty else []
@@ -928,14 +1034,14 @@ try:
                             fig_g2.update_yaxes(showgrid=True, gridcolor='#F0F1F6', secondary_y=False)
                             st.plotly_chart(fig_g2, use_container_width=True)
 
-        if date_col_ai and not df_ai.empty:
+        if date_col_ai and not df_ai_1.empty:
             # --- AI Perf Chart ---
             st.markdown('<div style="margin-top:20px;"></div>', unsafe_allow_html=True)
             ai_metrics_options = [c for c in df_ai.columns if c != date_col_ai]
             selected_ai_metrics = st.multiselect("Select AI Metrics", ai_metrics_options, default=ai_metrics_options[:1] if ai_metrics_options else None, label_visibility="collapsed", key="ai_sel")
             
             fig_ai = go.Figure()
-            if selected_ai_metrics and not df_ai_1.empty:
+            if selected_ai_metrics:
                 colors = ['#8B5CF6', '#42D2E6', '#FF6475', '#FFB000', '#22C55E']
                 for idx, metric in enumerate(selected_ai_metrics):
                     c_color = colors[idx % len(colors)]
@@ -950,7 +1056,6 @@ try:
                     if not enable_compare:
                         fig_ai.add_trace(go.Scatter(x=d_agg1, y=y_ai1, mode='lines+markers', name=metric, line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(c_color, 0.1)))
                     else:
-                        dates_a2 = df_ai_2[date_col_ai].astype(str).tolist() if not df_ai_2.empty else []
                         y_ai2_raw = df_ai_2[metric].apply(clean_ai).fillna(0).tolist() if not df_ai_2.empty else []
                         _, y_ai2 = aggregate_trend(dates_a2, y_ai2_raw, freq, 'sum') if y_ai2_raw else ([], [])
                         
@@ -963,8 +1068,6 @@ try:
                 
                 fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
                 st.plotly_chart(fig_ai, use_container_width=True)
-            elif df_ai_1.empty:
-                st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
         # 10. Raw Tables
@@ -979,12 +1082,12 @@ try:
     </div>
 </div>
 """, unsafe_allow_html=True)
-        df_display = df_de[['Metric'] + [c for c in filtered_cols_1 if c in df_de.columns]].copy()
+        df_display = df_de[['Metric'] + fc1].copy()
         df_display.columns = ['Metric'] + dates1
         df_display = df_display.set_index('Metric')
         st.dataframe(df_display, use_container_width=True, height=350)
         
-        if date_col_gsc and not df_gsc.empty:
+        if date_col_gsc and not df_gsc_1.empty:
             st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
@@ -997,7 +1100,7 @@ try:
 """, unsafe_allow_html=True)
             st.dataframe(df_gsc_1, use_container_width=True, height=350)
             
-        if date_col_ai and not df_ai.empty:
+        if date_col_ai and not df_ai_1.empty:
             st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
     <div class="flex-center">
