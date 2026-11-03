@@ -64,7 +64,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. 核心图表与数据处理工具集 (防截断压缩重构版)
+# 1. 核心图表与数据处理工具集
 # ==========================================
 def hex_to_rgba(hex_color, alpha=0.1):
     hex_color = hex_color.lstrip('#')
@@ -74,12 +74,16 @@ def clean_val(s):
     if pd.isna(s): return 0
     return pd.to_numeric(str(s).replace(',','').replace('$','').replace('%',''), errors='coerce')
 
+def clean_str(s):
+    # 终极字符清理工具：去空格、转小写、替换中英文括号，用于底层列名和指标名的模糊匹配
+    return str(s).replace(' ', '').replace('（', '(').replace('）', ')').lower()
+
 def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
     if not dates or df_src.empty: return [], []
     if is_row_based:
         data = pd.DataFrame()
         for k in keys:
-            kc = str(k).replace(' ','').lower()
+            kc = clean_str(k)
             matched = df_src[df_src['Metric_Norm'].str.contains(kc, na=False)]
             if not matched.empty: data = matched; break
         if data.empty: return [], []
@@ -88,9 +92,9 @@ def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
     else:
         c_tgt = ""
         for k in keys:
-            kc = str(k).replace(' ','').lower()
+            kc = clean_str(k)
             for c in df_src.columns:
-                cc = str(c).replace(' ','').lower()
+                cc = clean_str(c)
                 if kc in cc and ('点击' in cc or '展示' in cc or kc == cc): c_tgt = c; break
             if c_tgt: break
         if not c_tgt: return [], []
@@ -141,7 +145,7 @@ def load_data(url, is_de=False):
             else: c_cols.append(cs)
         df.columns = c_cols
         df['Metric'] = df['Metric'].astype(str).str.strip()
-        df['Metric_Norm'] = df['Metric'].str.replace(' ','').str.lower()
+        df['Metric_Norm'] = df['Metric'].apply(clean_str)
         return df[[c for c in df.columns if "空_" not in c]].dropna(subset=['Metric'])
     else:
         r0, r1 = df_raw.iloc[0].ffill(), df_raw.iloc[1]
@@ -196,7 +200,7 @@ try:
         def sum_de(keys, cols, curr=False):
             data = pd.DataFrame()
             for k in keys:
-                m = df_de[df_de['Metric_Norm'].str.contains(k.replace(' ','').lower(), na=False)]
+                m = df_de[df_de['Metric_Norm'].str.contains(clean_str(k), na=False)]
                 if not m.empty: data = m; break
             if data.empty or not cols: return 0.0
             vc = [c for c in cols if c in data.columns]
@@ -228,48 +232,59 @@ try:
             if df_gsc is None or df_gsc.empty: return 0.0
             tgt = ""
             for c in df_gsc.columns:
-                if key.lower() in str(c).lower() and '点击' in str(c).lower(): tgt=c; break
+                if clean_str(key) in clean_str(c) and '点击' in clean_str(c): tgt=c; break
             if not tgt: return 0.0
             return df_gsc[(df_gsc[dc_gsc]>=sd) & (df_gsc[dc_gsc]<=ed)][tgt].apply(clean_val).sum()
         
-        m_g, lm_g, ly_g = g_gsc(date(c_yr, c_mo, 1), dt_data, '点击（gsc）'), g_gsc(date(lm_yr, lm_mo, 1), date(lm_yr, lm_mo, lm_d), '点击（gsc）'), g_gsc(date(ly_yr, c_mo, 1), date(ly_yr, c_mo, ly_d), '点击（gsc）')
+        m_g, lm_g, ly_g = g_gsc(date(c_yr, c_mo, 1), dt_data, '点击(gsc)'), g_gsc(date(lm_yr, lm_mo, 1), date(lm_yr, lm_mo, lm_d), '点击(gsc)'), g_gsc(date(ly_yr, c_mo, 1), date(ly_yr, c_mo, ly_d), '点击(gsc)')
         mm_g = ((m_g-lm_g)/lm_g)*100 if lm_g>0 else 0; yy_g = ((m_g-ly_g)/ly_g)*100 if ly_g>0 else 0
         st.markdown(f'<div class="soft-card" style="display:flex; justify-content:space-between; padding-bottom:30px;"><div style="flex:1;"><p class="text-muted" style="margin-bottom:8px;">GSC Clicks MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin:0; font-size:32px;">{m_g:,.0f}</h2></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">{lm_g:,.0f}</h2><span style="color:{t_ui(mm_g)[0]}; background:{t_ui(mm_g)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(mm_g)[2]} {abs(mm_g):.1f}% MoM</span></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">{ly_g:,.0f}</h2><span style="color:{t_ui(yy_g)[0]}; background:{t_ui(yy_g)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(yy_g)[2]} {abs(yy_g):.1f}% YoY</span></div></div>', unsafe_allow_html=True)
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
-        # ⭐ Annual Trends (YoY Overview) 无需筛选时间
+        # ⭐ Annual Trends (YoY Overview) 自动截断未完成月份
         # ==========================================
         st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-solid fa-chart-line"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Annual Trends (YoY Overview)</h3></div>', unsafe_allow_html=True)
         st.caption("Auto-aggregated monthly trends comparing 2026 vs 2025 across all available data.")
         
         def get_yoy_data(key, y, is_gsc=False):
             res = {str(m):0.0 for m in range(1,13)}
+            
+            # 判断逻辑：只统计到完整的自然月。如果是今年，只统计到上个月。
+            last_valid_month_for_display = 12
+            if y == c_yr:
+                last_valid_month_for_display = c_mo - 1 if c_mo > 1 else 1
+            
             if is_gsc:
                 if df_gsc is None or df_gsc.empty: return []
                 c_tgt = ""
                 for c in df_gsc.columns:
-                    if key.replace(' ','').lower() in str(c).replace(' ','').lower() and '点击' in str(c).lower(): c_tgt=c; break
+                    if clean_str(key) in clean_str(c) and '点击' in clean_str(c): c_tgt=c; break
                 if not c_tgt: return []
                 df_t = df_gsc[pd.to_datetime(df_gsc[dc_gsc]).dt.year == y].copy()
                 if df_t.empty: return []
                 ms = df_t.groupby(pd.to_datetime(df_t[dc_gsc]).dt.month)[c_tgt].apply(lambda x: x.apply(clean_val).sum()).to_dict()
                 for m,v in ms.items(): res[str(m)] = v
             else:
-                data = df_de[df_de['Metric_Norm'].str.contains(key.replace(' ','').lower(), na=False)]
+                data = df_de[df_de['Metric_Norm'].str.contains(clean_str(key), na=False)]
                 if data.empty: return []
                 for c in data.columns:
                     try:
                         dt = pd.to_datetime(c)
                         if dt.year == y: res[str(dt.month)] += clean_val(data[c].iloc[0])
                     except: pass
+                    
             vals = [res[str(m)] for m in range(1,13)]
             if sum(vals)==0: return []
-            last_m = 12
-            for i in range(11,-1,-1):
-                if vals[i]!=0: last_m=i+1; break
-            if y == c_yr: last_m = min(last_m, c_mo)
-            return vals[:last_m]
+            
+            # 如果是过去年份，找到最后一个非0月；如果是今年，严格截断到上个月
+            if y < c_yr:
+                last_m = 12
+                for i in range(11,-1,-1):
+                    if vals[i]!=0: last_m=i+1; break
+                return vals[:last_m]
+            else:
+                return vals[:last_valid_month_for_display]
 
         col_y1, col_y2 = st.columns(2)
         mlbs = [f"{m}月" for m in range(1,13)]
@@ -277,8 +292,8 @@ try:
         
         with col_y1:
             st.markdown('<div class="soft-card" style="padding:16px 24px; margin-bottom:16px; border-radius:16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom:0;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700;">SEO 点击数据对比 (GSC 2026 vs 2025 YoY)</span></div></div>', unsafe_allow_html=True)
-            y_tbs = st.tabs(['站内点击走势 (非品牌词非Blog非utm)', '全站 GSC 大盘总点击走势', 'Blog 点击走势'])
-            y_ks = ['点击（非品牌词非Blog非utm）', '点击（GSC）', '点击（Blog）']
+            y_tbs = st.tabs(['站内点击走势 (非品牌词非Blog非utm)', 'GSC 总点击趋势', 'Blog 点击走势'])
+            y_ks = ['点击(非品牌词非Blog非utm)', '点击(GSC)', '点击(Blog)']
             for i, tb in enumerate(y_tbs):
                 with tb:
                     v25, v26 = get_yoy_data(y_ks[i], 2025, True), get_yoy_data(y_ks[i], 2026, True)
