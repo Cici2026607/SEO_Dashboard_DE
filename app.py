@@ -214,8 +214,6 @@ try:
                 load_gsc_data.clear()
                 load_ai_perf_data.clear()
                 st.rerun()
-        
-        # ⭐ 更新为10月目标
         with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=6000.0, step=500.0)
         with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=18000.0, step=1000.0)
                 
@@ -399,6 +397,7 @@ try:
             if target_year == current_year:
                 last_valid_month = current_month - 1 if current_month > 1 else 1
 
+            # 核心安全清洗：剔除 nan，解决 AI Assistant 提取时的 float 报错
             def safe_clean(x):
                 if pd.isna(x) or str(x).strip() == '' or str(x).strip().lower() == 'nan': return 0.0
                 v = pd.to_numeric(str(x).replace(',', '').replace('$', '').replace('%', ''), errors='coerce')
@@ -473,8 +472,9 @@ try:
                     fy.update_layout(**layout_yoy); fy.update_xaxes(showgrid=True, gridcolor='#F0F1F6'); fy.update_yaxes(showgrid=True, gridcolor='#F0F1F6')
                     st.plotly_chart(fy, use_container_width=True)
         with col_yoy_2:
-            st.markdown('<div class="soft-card" style="padding:16px 24px; margin-bottom:16px; border-radius:16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom:0;"><i class="fa-solid fa-robot"></i></div><span class="text-main" style="font-weight:700;">AI Assistant 年度对比 (2026 vs 2025 YoY)</span></div></div>', unsafe_allow_html=True)
-            a_tbs = st.tabs(['AI 贡献销售额月度同比', 'AI 来源流量月度同比'])
+            # ⭐ 更新了标题，去掉了 YoY 强调，改为简单的月度对比
+            st.markdown('<div class="soft-card" style="padding:16px 24px; margin-bottom:16px; border-radius:16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom:0;"><i class="fa-solid fa-robot"></i></div><span class="text-main" style="font-weight:700;">AI Assistant 数据月度对比</span></div></div>', unsafe_allow_html=True)
+            a_tbs = st.tabs(['AI 贡献销售额月度对比', 'AI 来源流量月度对比'])
             with a_tbs[0]:
                 v25 = get_yoy_data('aiassistant销售额', 2025, False)
                 v26 = get_yoy_data('aiassistant销售额', 2026, False)
@@ -495,7 +495,7 @@ try:
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
-        # 4. 全局漏斗分析区间 
+        # 4. 全局漏斗分析区间 (加入时间聚合引擎)
         # ==========================================
         valid_dates = list(date_mapping.values())
         min_date = min(valid_dates) if valid_dates else date.today()
@@ -672,7 +672,7 @@ try:
 </div>
 """, unsafe_allow_html=True)
 
-        if date_col_gsc and not df_gsc_1.empty:
+        if date_col_gsc and not df_gsc.empty:
             gsc_metrics_list = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_colors = ['#FF6475', '#42D2E6', '#FFB000', '#8B5CF6', '#2D235C', '#10B981']
             
@@ -682,7 +682,7 @@ try:
                 if c_clk not in df_source.columns: c_clk = f"{seg}_点击" 
                 if c_clk not in df_source.columns:
                     for c in df_source.columns:
-                        if str(seg).replace(' ', '').replace('（', '(').replace('）', ')').lower() in str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower() and ('点击' in c or 'click' in c.lower()):
+                        if seg.replace(' ', '').replace('（', '(').replace('）', ')').lower() in str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower() and ('点击' in c or 'click' in c.lower()):
                             c_clk = c
                             break
                 if c_clk not in df_source.columns: return 0.0
@@ -709,7 +709,7 @@ try:
             gsc_html += '</div></div>\n'
             st.markdown(gsc_html, unsafe_allow_html=True)
 
-        if date_col_ai and not df_ai_1.empty:
+        if date_col_ai and not df_ai.empty:
             ai_metrics_cards = [
                 ("AI Performance（GSC）", ['aiperformance(gsc)', 'aiperformance(总)', 'aiperformance'], '#8B5CF6'),
                 ("AI Performance（非Blog）", ['aiperformance(非blog)'], '#42D2E6'),
@@ -776,6 +776,11 @@ try:
         # ==========================================
         # 6. 图表与明细 
         # ==========================================
+        def hex_to_rgba(hex_color, alpha=0.1):
+            hex_color = hex_color.lstrip('#')
+            r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            return f'rgba({r}, {g}, {b}, {alpha})'
+
         def get_trend_series(possible_names, cols, is_curr=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
@@ -891,7 +896,7 @@ try:
                     c_clk = f"{seg}_点击" 
                 if c_clk not in df_source.columns:
                     for c in df_source.columns:
-                        if seg.replace(' ', '').replace('（', '(').replace('）', ')').lower() in str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower() and ('点击' in c or 'click' in c.lower()):
+                        if str(seg).replace(' ', '').replace('（', '(').replace('）', ')').lower() in str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower() and ('点击' in c or 'click' in c.lower()):
                             c_clk = c
                             break
                 if c_clk in df_source.columns:
@@ -1048,6 +1053,8 @@ try:
                 
                 fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
                 st.plotly_chart(fig_ai, use_container_width=True)
+            elif df_ai_1.empty:
+                st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
         # 10. Raw Tables
