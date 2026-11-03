@@ -4,7 +4,6 @@ from datetime import datetime, date, timedelta
 import calendar
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import os
 
 # ==========================================
 # 0. Page Config & Login
@@ -29,7 +28,7 @@ if not st.session_state["logged_in"]:
     st.stop()
 
 # ==========================================
-# CSS 样式精简版
+# CSS 样式
 # ==========================================
 st.markdown("""
 <style>
@@ -98,8 +97,10 @@ def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
                 if kc in cc and ('点击' in cc or '展示' in cc or kc == cc): c_tgt = c; break
             if c_tgt: break
         if not c_tgt: return [], []
+        
         dc = [c for c in df_src.columns if '日' in str(c) or 'date' in str(c).lower()][0]
-        mask = df_src[dc].astype(str).isin(dates)
+        # 使用 strftime 将日期格式化为纯净的 YYYY-MM-DD，以便精准匹配
+        mask = df_src[dc].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else "").isin(dates)
         temp = df_src[mask].copy()
         temp['val'] = temp[c_tgt].apply(clean_val)
         temp['date'] = pd.to_datetime(temp[dc])
@@ -107,32 +108,39 @@ def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
     temp.set_index('date', inplace=True)
     res = temp.resample('D') if freq=='D' else (temp.resample('W-MON') if freq=='W' else temp.resample('ME'))
     df_agg = res.sum().fillna(0) if agg=='sum' else res.mean().fillna(0)
-    out_d = df_agg.index.strftime('%Y-%m').tolist() if freq=='M' else df_agg.index.strftime('%Y-%m-%d').tolist()
-    return out_d, df_agg['val'].tolist()
+    
+    # 核心修复：直接返回 DatetimeIndex 给 Plotly，避免 X 轴文字挤压堆叠
+    return df_agg.index, df_agg['val'].tolist()
 
 def draw_trend_simple(fig, x, y, name, color, is_cmp=False, fill=False):
-    # 专为单Y轴图表使用的绘制函数，避免 sec_y 参数报错
     dash = 'dash' if is_cmp else 'solid'
     sz = 10 if is_cmp else 12
     fc = hex_to_rgba(color, 0.1) if (fill and not is_cmp) else 'rgba(0,0,0,0)'
-    fig.add_trace(go.Scatter(x=x, y=y, mode='lines+markers', name=name, line=dict(color=color, width=3, dash=dash, shape='spline'), marker=dict(size=sz, color=color, line=dict(width=2.5, color='white')), fill='tozeroy' if fill and not is_cmp else 'none', fillcolor=fc))
+    trace = go.Scatter(x=x, y=y, mode='lines+markers', name=name, 
+                       line=dict(color=color, width=3, dash=dash, shape='spline'), 
+                       marker=dict(size=sz, color=color, line=dict(width=2.5, color='white')), 
+                       fill='tozeroy' if fill and not is_cmp else 'none', fillcolor=fc)
+    fig.add_trace(trace)
 
 def draw_trend_dual(fig, x, y, name, color, is_cmp=False, fill=False, is_bar=False, sec_y=False, is_dot_line=False):
-    # 专为双Y轴图表 (make_subplots) 使用的绘制函数
     if is_bar:
         c = 'rgba(142,140,167,0.3)' if is_cmp else hex_to_rgba(color, 0.65)
         lc = '#8E8CA7' if is_cmp else color
-        fig.add_trace(go.Bar(x=x, y=y, name=name, marker=dict(color=c, line=dict(color=lc, width=2))), secondary_y=sec_y)
+        trace = go.Bar(x=x, y=y, name=name, marker=dict(color=c, line=dict(color=lc, width=2)))
     else:
         dash = 'dash' if is_cmp else ('dot' if is_dot_line else 'solid')
         sz = 10 if is_cmp else 12
         fc = hex_to_rgba(color, 0.1) if (fill and not is_cmp) else 'rgba(0,0,0,0)'
-        fig.add_trace(go.Scatter(x=x, y=y, mode='lines+markers', name=name, line=dict(color=color, width=2 if is_dot_line else 3, dash=dash, shape='spline'), marker=dict(size=sz, color=color, line=dict(width=2.5, color='white')), fill='tozeroy' if fill and not is_cmp else 'none', fillcolor=fc), secondary_y=sec_y)
+        trace = go.Scatter(x=x, y=y, mode='lines+markers', name=name, 
+                           line=dict(color=color, width=2 if is_dot_line else 3, dash=dash, shape='spline'), 
+                           marker=dict(size=sz, color=color, line=dict(width=2.5, color='white')), 
+                           fill='tozeroy' if fill and not is_cmp else 'none', fillcolor=fc)
+    fig.add_trace(trace, secondary_y=sec_y)
 
 def apply_layout(fig, prefix=""):
     fig.update_layout(font=dict(family="Poppins", color="#8E8CA7"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
     fig.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
-    fig.update_yaxes(showgrid=True, gridcolor='#F0F1F6', tickprefix=prefix)
+    fig.update_yaxes(showgrid=True, gridcolor='#F0F1F6', tickprefix=prefix, secondary_y=False)
 
 # ==========================================
 # 2. Data Loaders
@@ -237,7 +245,7 @@ try:
         st.markdown(f'<div class="soft-card" style="display:flex; justify-content:space-between; padding-bottom:30px;"><div style="flex:1;"><p class="text-muted" style="margin-bottom:8px;">Traffic MTD <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin:0; font-size:32px;">{m_trf:,.0f}</h2></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">{lm_trf:,.0f}</h2><span style="color:{t_ui(mm_t)[0]}; background:{t_ui(mm_t)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(mm_t)[2]} {abs(mm_t):.1f}% MoM</span></div><div style="flex:1; border-left:2px solid #F0F1F6; padding-left:30px;"><p class="text-muted" style="margin-bottom:8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin:0; font-size:26px; margin-bottom:12px;">{ly_trf:,.0f}</h2><span style="color:{t_ui(yy_t)[0]}; background:{t_ui(yy_t)[1]}; padding:4px 12px; border-radius:8px; font-weight:600; font-size:13px;">{t_ui(yy_t)[2]} {abs(yy_t):.1f}% YoY</span></div></div>', unsafe_allow_html=True)
 
         def g_gsc(sd, ed, key):
-            if df_gsc is None or df_gsc.empty: return 0.0
+            if df_gsc is None or df_gsc.empty or not dc_gsc: return 0.0
             tgt = ""
             for c in df_gsc.columns:
                 if clean_str(key) in clean_str(c) and '点击' in clean_str(c): tgt=c; break
@@ -257,6 +265,8 @@ try:
         
         def get_yoy_data(key, y, is_gsc=False):
             res = {str(m):0.0 for m in range(1,13)}
+            
+            # 解决11月份突降：如果是今年，强制只统计算到上个月
             last_valid_month = 12
             if y == c_yr:
                 last_valid_month = c_mo - 1 if c_mo > 1 else 1
@@ -283,6 +293,7 @@ try:
             vals = [res[str(m)] for m in range(1,13)]
             if all(v == 0 or v is None for v in vals): return []
             
+            # 强行过滤 2025年 GSC 数据：1到4月隐身，5月起跑
             if is_gsc and y == 2025:
                 vals = [None, None, None, None] + vals[4:]
             
@@ -354,8 +365,9 @@ try:
         fc1 = [c for c, d in d_map.items() if sd1 <= d <= ed1]
         fc2 = [c for c, d in d_map.items() if sd2 and sd2 <= d <= ed2] if en_cmp else []
         
-        d_g1 = [str(d) for d in pd.date_range(sd1, ed1)]
-        d_g2 = [str(d) for d in pd.date_range(sd2, ed2)] if en_cmp and sd2 else []
+        # 核心修复：生成纯净的 YYYY-MM-DD 字符串列表用于底层匹配
+        d_g1 = [d.strftime('%Y-%m-%d') for d in pd.date_range(sd1, ed1)]
+        d_g2 = [d.strftime('%Y-%m-%d') for d in pd.date_range(sd2, ed2)] if en_cmp and sd2 else []
 
         def f_cmp(v1, v2, is_curr=False, is_pct=False, inv=False, dark=False):
             if not en_cmp: return ""
@@ -437,7 +449,8 @@ try:
             draw_trend_simple(fs, d1_a, v1, f"{m} (Pri)" if en_cmp else m, sc[m], False, True)
             if en_cmp:
                 d2_a, v2 = get_agg_series(df_de, [k], fc2, freq)
-                draw_trend_simple(fs, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", sc[m], True, False)
+                xa = [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a
+                draw_trend_simple(fs, xa, v2, f"{m} (Cmp)", sc[m], True, False)
         apply_layout(fs, "$"); st.plotly_chart(fs, use_container_width=True)
         
         st.markdown('<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;"><div class="flex-center"><div class="icon-small bg-blue flex-center" style="justify-content:center; margin-bottom: 0;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span></div></div>', unsafe_allow_html=True)
@@ -445,16 +458,16 @@ try:
         ft = go.Figure()
         tc = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000', 'AI Assistant 流量': '#8B5CF6'}
         for m in stt:
-            k = 'seoblog流量' if m == 'SEO Blog 流量' else ('seo站内流量' if m == 'SEO 站内流量' else m.replace(' ', '').lower())
+            k = 'seoblog流量' if m == 'SEO Blog 流量' else ('seo站内流量' if m == 'SEO 站内流量' else clean_str(m))
             d1_a, v1 = get_agg_series(df_de, [k], fc1, freq)
             draw_trend_simple(ft, d1_a, v1, f"{m} (Pri)" if en_cmp else m, tc[m], False, True)
             if en_cmp:
                 d2_a, v2 = get_agg_series(df_de, [k], fc2, freq)
-                draw_trend_simple(ft, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", tc[m], True, False)
+                xa = [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a
+                draw_trend_simple(ft, xa, v2, f"{m} (Cmp)", tc[m], True, False)
         apply_layout(ft); st.plotly_chart(ft, use_container_width=True)
 
-        # GSC & AI Cards
-        if date_col_gsc and not df_gsc.empty:
+        if dc_gsc and not df_gsc.empty:
             gsc_metrics = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_c = ['#FF6475', '#42D2E6', '#FFB000', '#8B5CF6', '#2D235C', '#10B981']
             
@@ -474,7 +487,8 @@ try:
                 draw_trend_simple(fg, d1_a, v1, f"{m} (Pri)" if en_cmp else m, gsc_c[idx], False, True)
                 if en_cmp:
                     d2_a, v2 = get_agg_series(df_gsc, [m], d_g2, freq, is_row_based=False)
-                    draw_trend_simple(fg, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", gsc_c[idx], True, False)
+                    xa = [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a
+                    draw_trend_simple(fg, xa, v2, f"{m} (Cmp)", gsc_c[idx], True, False)
             apply_layout(fg); st.plotly_chart(fg, use_container_width=True)
 
             g_tabs = st.tabs(gsc_metrics)
@@ -484,13 +498,13 @@ try:
                     f1 = make_subplots(specs=[[{"secondary_y": True}]])
                     d1_a, v1_c = get_agg_series(df_gsc, [f"{m}_点击"], d_g1, freq, is_row_based=False)
                     _, v1_i = get_agg_series(df_gsc, [f"{m}_展示"], d_g1, freq, is_row_based=False)
-                    draw_trend_dual(f1, d1_a, v1_c, "点击次数 (Pri)" if en_cmp else "点击次数", '#42D2E6', False, False, True, sec_y=False)
+                    draw_trend_dual(f1, d1_a, v1_c, "点击次数 (Pri)" if en_cmp else "点击次数", '#42D2E6', False, False, False, sec_y=False)
                     draw_trend_dual(f1, d1_a, v1_i, "展示 (Pri)" if en_cmp else "展示", '#FF6475', False, False, False, sec_y=True)
                     if en_cmp:
                         d2_a, v2_c = get_agg_series(df_gsc, [f"{m}_点击"], d_g2, freq, is_row_based=False)
                         _, v2_i = get_agg_series(df_gsc, [f"{m}_展示"], d_g2, freq, is_row_based=False)
                         xa = [f"P {j+1}" for j in range(max(len(v1_c), len(v2_c)))] if freq=='D' else d2_a
-                        draw_trend_dual(f1, xa, v2_c, "点击次数 (Cmp)", '#8E8CA7', True, False, True, sec_y=False)
+                        draw_trend_dual(f1, xa, v2_c, "点击次数 (Cmp)", '#8E8CA7', True, False, False, sec_y=False)
                         draw_trend_dual(f1, xa, v2_i, "展示 (Cmp)", 'rgba(255,100,117,0.5)', True, False, False, sec_y=True)
                     apply_layout(f1); st.plotly_chart(f1, use_container_width=True)
 
@@ -507,7 +521,7 @@ try:
                         draw_trend_dual(f2, xa, v2_po, "排名 (Cmp)", 'rgba(139,92,246,0.5)', True, False, False, sec_y=True, is_dot_line=True)
                     apply_layout(f2); f2.update_yaxes(autorange="reversed", secondary_y=True); st.plotly_chart(f2, use_container_width=True)
 
-        if date_col_ai and not df_ai.empty:
+        if dc_ai and not df_ai.empty:
             ai_c = [("AI Performance（GSC）", ['aiperformance(gsc)'], '#8B5CF6'), ("AI Performance（非Blog）", ['aiperformance(非blog)'], '#42D2E6'), ("AI Performance（Blog）", ['aiperformance(blog)'], '#FF6475')]
             h_ai = '<div class="soft-card"><h4 class="text-main" style="margin: 0 0 24px 0; display: flex; align-items: center;"><div class="icon-small bg-purple flex-center" style="justify-content:center;"><i class="fa-solid fa-microchip"></i></div> AI Performance Breakdown (Selected Interval)</h4><div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">'
             for nm, k, cx in ai_c:
@@ -517,7 +531,7 @@ try:
                 h_ai += f'<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:{cx}; font-size:8px; margin-right:8px;"></i> {nm}</p><p class="box-value-dark">{s1:,.0f}</p>{f_cmp(s1, s2)}</div>'
             st.markdown(h_ai + '</div></div>', unsafe_allow_html=True)
             
-            sai = st.multiselect("AI Trends", [c for c in df_ai.columns if c!=date_col_ai], default=[df_ai.columns[1]], label_visibility="collapsed")
+            sai = st.multiselect("AI Trends", [c for c in df_ai.columns if c!=dc_ai], default=[df_ai.columns[1]], label_visibility="collapsed")
             fai = go.Figure()
             cols = ['#8B5CF6', '#42D2E6', '#FF6475', '#FFB000', '#22C55E']
             for idx, m in enumerate(sai):
@@ -526,7 +540,8 @@ try:
                 draw_trend_simple(fai, d1_a, v1, f"{m} (Pri)" if en_cmp else m, cc, False, True)
                 if en_cmp:
                     d2_a, v2 = get_agg_series(df_ai, [m], d_g2, freq, is_row_based=False)
-                    draw_trend_simple(fai, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", cc, True, False)
+                    xa = [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a
+                    draw_trend_simple(fai, xa, v2, f"{m} (Cmp)", cc, True, False)
             apply_layout(fai); st.plotly_chart(fai, use_container_width=True)
 
         # Raw Table
