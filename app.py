@@ -4,6 +4,7 @@ from datetime import datetime, date, timedelta
 import calendar
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import os
 
 # ==========================================
 # 0. Page Config & Login
@@ -75,7 +76,6 @@ def clean_val(s):
     return pd.to_numeric(str(s).replace(',','').replace('$','').replace('%',''), errors='coerce')
 
 def clean_str(s):
-    # 终极字符清理工具：去空格、转小写、替换中英文括号，用于底层列名和指标名的模糊匹配
     return str(s).replace(' ', '').replace('（', '(').replace('）', ')').lower()
 
 def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
@@ -110,16 +110,22 @@ def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
     out_d = df_agg.index.strftime('%Y-%m').tolist() if freq=='M' else df_agg.index.strftime('%Y-%m-%d').tolist()
     return out_d, df_agg['val'].tolist()
 
-def draw_trend(fig, x, y, name, color, is_cmp=False, fill=False, is_bar=False, sec_y=False, is_dot_line=False):
+def draw_trend(fig, x, y, name, color, is_cmp=False, fill=False, is_bar=False, sec_y=None, is_dot_line=False):
     if is_bar:
         c = 'rgba(142,140,167,0.3)' if is_cmp else hex_to_rgba(color, 0.65)
         lc = '#8E8CA7' if is_cmp else color
-        fig.add_trace(go.Bar(x=x, y=y, name=name, marker=dict(color=c, line=dict(color=lc, width=2))), secondary_y=sec_y)
+        trace = go.Bar(x=x, y=y, name=name, marker=dict(color=c, line=dict(color=lc, width=2)))
     else:
         dash = 'dash' if is_cmp else ('dot' if is_dot_line else 'solid')
         sz = 10 if is_cmp else 12
         fc = hex_to_rgba(color, 0.1) if (fill and not is_cmp) else 'rgba(0,0,0,0)'
-        fig.add_trace(go.Scatter(x=x, y=y, mode='lines+markers', name=name, line=dict(color=color, width=2 if is_dot_line else 3, dash=dash, shape='spline'), marker=dict(size=sz, color=color, line=dict(width=2.5, color='white')), fill='tozeroy' if fill and not is_cmp else 'none', fillcolor=fc), secondary_y=sec_y)
+        trace = go.Scatter(x=x, y=y, mode='lines+markers', name=name, line=dict(color=color, width=2 if is_dot_line else 3, dash=dash, shape='spline'), marker=dict(size=sz, color=color, line=dict(width=2.5, color='white')), fill='tozeroy' if fill and not is_cmp else 'none', fillcolor=fc)
+    
+    # 动态适配单Y轴与双Y轴图表，防止报错
+    if hasattr(fig, '_grid_ref'):
+        fig.add_trace(trace, secondary_y=False if sec_y is None else sec_y)
+    else:
+        fig.add_trace(trace)
 
 def apply_layout(fig, prefix=""):
     fig.update_layout(font=dict(family="Poppins", color="#8E8CA7"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
@@ -242,7 +248,7 @@ try:
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
-        # ⭐ Annual Trends (YoY Overview) 自动截断未完成月份
+        # ⭐ Annual Trends (YoY Overview) 自动截断未完成月份 + 2025年5月起跑
         # ==========================================
         st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-solid fa-chart-line"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Annual Trends (YoY Overview)</h3></div>', unsafe_allow_html=True)
         st.caption("Auto-aggregated monthly trends comparing 2026 vs 2025 across all available data.")
@@ -251,9 +257,9 @@ try:
             res = {str(m):0.0 for m in range(1,13)}
             
             # 判断逻辑：只统计到完整的自然月。如果是今年，只统计到上个月。
-            last_valid_month_for_display = 12
+            last_valid_month = 12
             if y == c_yr:
-                last_valid_month_for_display = c_mo - 1 if c_mo > 1 else 1
+                last_valid_month = c_mo - 1 if c_mo > 1 else 1
             
             if is_gsc:
                 if df_gsc is None or df_gsc.empty: return []
@@ -275,16 +281,20 @@ try:
                     except: pass
                     
             vals = [res[str(m)] for m in range(1,13)]
-            if sum(vals)==0: return []
+            if all(v == 0 or v is None for v in vals): return []
             
-            # 如果是过去年份，找到最后一个非0月；如果是今年，严格截断到上个月
+            # 针对 GSC 2025年数据，强行过滤掉 1月到4月，从5月份开始展示 (设置为 None 会让 Plotly 直接断线)
+            if is_gsc and y == 2025:
+                vals = [None, None, None, None] + vals[4:]
+            
+            # 如果是过去年份，找到最后一个非空且非0的月份；如果是今年，严格截断到上个月
             if y < c_yr:
                 last_m = 12
                 for i in range(11,-1,-1):
-                    if vals[i]!=0: last_m=i+1; break
+                    if vals[i] != 0 and vals[i] is not None: last_m=i+1; break
                 return vals[:last_m]
             else:
-                return vals[:last_valid_month_for_display]
+                return vals[:last_valid_month]
 
         col_y1, col_y2 = st.columns(2)
         mlbs = [f"{m}月" for m in range(1,13)]
@@ -391,31 +401,34 @@ try:
         with cg:
             st.markdown(f'<div class="soft-card" style="height: 100%;"><p style="margin-bottom:12px; font-weight:700;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p><div style="display: flex; margin-top:16px;"><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p><p class="box-value-dark">-</p></div><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark">-</p></div><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark">-</p></div></div></div>', unsafe_allow_html=True)
 
-        # 图表模块
+        # 图表模块 (避免 go.Figure 遭遇 secondary_y 报错)
         st.markdown('<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; border-radius: 16px;"><div class="flex-center"><div class="icon-small bg-red flex-center" style="justify-content:center; margin-bottom: 0;"><i class="fa-solid fa-chart-area"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span></div></div>', unsafe_allow_html=True)
         ss = st.multiselect("Sales", ['GA4 SEO销售额', 'Superset SEO销售额', 'AI Assistant 销售额'], default=['GA4 SEO销售额'], label_visibility="collapsed")
-        fs = go.Figure()
+        
+        # 强制使用 make_subplots 避免画布冲突
+        fs = make_subplots(specs=[[{"secondary_y": True}]])
         sc = {'GA4 SEO销售额': '#FF6475', 'Superset SEO销售额': '#FFB000', 'AI Assistant 销售额': '#8B5CF6'}
         for m in ss:
             k = 'ga4seo销售额' if m == 'GA4 SEO销售额' else ('aiassistant销售额' if m == 'AI Assistant 销售额' else 'supersetseo销售额')
             d1_a, v1 = get_agg_series(df_de, [k], fc1, freq)
-            draw_trend(fs, d1_a, v1, f"{m} (Pri)" if en_cmp else m, sc[m], False, True)
+            draw_trend(fs, d1_a, v1, f"{m} (Pri)" if en_cmp else m, sc[m], False, True, sec_y=False)
             if en_cmp:
                 d2_a, v2 = get_agg_series(df_de, [k], fc2, freq)
-                draw_trend(fs, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", sc[m], True)
+                draw_trend(fs, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", sc[m], True, sec_y=False)
         apply_layout(fs, "$"); st.plotly_chart(fs, use_container_width=True)
         
         st.markdown('<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;"><div class="flex-center"><div class="icon-small bg-blue flex-center" style="justify-content:center; margin-bottom: 0;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span></div></div>', unsafe_allow_html=True)
         stt = st.multiselect("Traffic", ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量', 'AI Assistant 流量'], default=['SEO流量'], label_visibility="collapsed")
-        ft = go.Figure()
+        
+        ft = make_subplots(specs=[[{"secondary_y": True}]])
         tc = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000', 'AI Assistant 流量': '#8B5CF6'}
         for m in stt:
             k = 'seoblog流量' if m == 'SEO Blog 流量' else ('seo站内流量' if m == 'SEO 站内流量' else m.replace(' ', '').lower())
             d1_a, v1 = get_agg_series(df_de, [k], fc1, freq)
-            draw_trend(ft, d1_a, v1, f"{m} (Pri)" if en_cmp else m, tc[m], False, True)
+            draw_trend(ft, d1_a, v1, f"{m} (Pri)" if en_cmp else m, tc[m], False, True, sec_y=False)
             if en_cmp:
                 d2_a, v2 = get_agg_series(df_de, [k], fc2, freq)
-                draw_trend(ft, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", tc[m], True)
+                draw_trend(ft, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", tc[m], True, sec_y=False)
         apply_layout(ft); st.plotly_chart(ft, use_container_width=True)
 
         # GSC & AI Cards
@@ -432,14 +445,14 @@ try:
             st.markdown(html + '</div></div>', unsafe_allow_html=True)
             
             sm = st.multiselect("GSC Trends", gsc_metrics, default=['点击（GSC）'], label_visibility="collapsed")
-            fg = go.Figure()
+            fg = make_subplots(specs=[[{"secondary_y": True}]])
             for m in sm:
                 idx = gsc_metrics.index(m)
                 d1_a, v1 = get_agg_series(df_gsc, [m], d_g1, freq, is_row_based=False)
-                draw_trend(fg, d1_a, v1, f"{m} (Pri)" if en_cmp else m, gsc_c[idx], False, True)
+                draw_trend(fg, d1_a, v1, f"{m} (Pri)" if en_cmp else m, gsc_c[idx], False, True, sec_y=False)
                 if en_cmp:
                     d2_a, v2 = get_agg_series(df_gsc, [m], d_g2, freq, is_row_based=False)
-                    draw_trend(fg, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", gsc_c[idx], True)
+                    draw_trend(fg, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", gsc_c[idx], True, sec_y=False)
             apply_layout(fg); st.plotly_chart(fg, use_container_width=True)
 
             g_tabs = st.tabs(gsc_metrics)
@@ -449,27 +462,27 @@ try:
                     f1 = make_subplots(specs=[[{"secondary_y": True}]])
                     d1_a, v1_c = get_agg_series(df_gsc, [f"{m}_点击"], d_g1, freq, is_row_based=False)
                     _, v1_i = get_agg_series(df_gsc, [f"{m}_展示"], d_g1, freq, is_row_based=False)
-                    draw_trend(f1, d1_a, v1_c, "点击次数 (Pri)" if en_cmp else "点击次数", '#42D2E6', False, False, True)
-                    draw_trend(f1, d1_a, v1_i, "展示 (Pri)" if en_cmp else "展示", '#FF6475', False, False, False, True)
+                    draw_trend(f1, d1_a, v1_c, "点击次数 (Pri)" if en_cmp else "点击次数", '#42D2E6', False, False, True, sec_y=False)
+                    draw_trend(f1, d1_a, v1_i, "展示 (Pri)" if en_cmp else "展示", '#FF6475', False, False, False, sec_y=True)
                     if en_cmp:
                         d2_a, v2_c = get_agg_series(df_gsc, [f"{m}_点击"], d_g2, freq, is_row_based=False)
                         _, v2_i = get_agg_series(df_gsc, [f"{m}_展示"], d_g2, freq, is_row_based=False)
                         xa = [f"P {j+1}" for j in range(max(len(v1_c), len(v2_c)))] if freq=='D' else d2_a
-                        draw_trend(f1, xa, v2_c, "点击次数 (Cmp)", '#8E8CA7', True, False, True)
-                        draw_trend(f1, xa, v2_i, "展示 (Cmp)", 'rgba(255,100,117,0.5)', True, False, False, True)
+                        draw_trend(f1, xa, v2_c, "点击次数 (Cmp)", '#8E8CA7', True, False, True, sec_y=False)
+                        draw_trend(f1, xa, v2_i, "展示 (Cmp)", 'rgba(255,100,117,0.5)', True, False, False, sec_y=True)
                     apply_layout(f1); st.plotly_chart(f1, use_container_width=True)
 
                     f2 = make_subplots(specs=[[{"secondary_y": True}]])
                     d1_a, v1_ct = get_agg_series(df_gsc, [f"{m}_点击率"], d_g1, freq, 'mean', False)
                     _, v1_po = get_agg_series(df_gsc, [f"{m}_排名"], d_g1, freq, 'mean', False)
-                    draw_trend(f2, d1_a, v1_ct, "点击率 (%) (Pri)" if en_cmp else "点击率 (%)", '#22C55E')
-                    draw_trend(f2, d1_a, v1_po, "排名 (Pri)" if en_cmp else "排名", '#8B5CF6', False, False, False, True, True)
+                    draw_trend(f2, d1_a, v1_ct, "点击率 (%) (Pri)" if en_cmp else "点击率 (%)", '#22C55E', sec_y=False)
+                    draw_trend(f2, d1_a, v1_po, "排名 (Pri)" if en_cmp else "排名", '#8B5CF6', False, False, False, sec_y=True, is_dot_line=True)
                     if en_cmp:
                         d2_a, v2_ct = get_agg_series(df_gsc, [f"{m}_点击率"], d_g2, freq, 'mean', False)
                         _, v2_po = get_agg_series(df_gsc, [f"{m}_排名"], d_g2, freq, 'mean', False)
                         xa = [f"P {j+1}" for j in range(max(len(v1_ct), len(v2_ct)))] if freq=='D' else d2_a
-                        draw_trend(f2, xa, v2_ct, "点击率 (Cmp)", 'rgba(34,197,94,0.5)', True)
-                        draw_trend(f2, xa, v2_po, "排名 (Cmp)", 'rgba(139,92,246,0.5)', True, False, False, True, True)
+                        draw_trend(f2, xa, v2_ct, "点击率 (Cmp)", 'rgba(34,197,94,0.5)', True, sec_y=False)
+                        draw_trend(f2, xa, v2_po, "排名 (Cmp)", 'rgba(139,92,246,0.5)', True, False, False, sec_y=True, is_dot_line=True)
                     apply_layout(f2); f2.update_yaxes(autorange="reversed", secondary_y=True); st.plotly_chart(f2, use_container_width=True)
 
         if date_col_ai and not df_ai.empty:
@@ -483,15 +496,15 @@ try:
             st.markdown(h_ai + '</div></div>', unsafe_allow_html=True)
             
             sai = st.multiselect("AI Trends", [c for c in df_ai.columns if c!=date_col_ai], default=[df_ai.columns[1]], label_visibility="collapsed")
-            fai = go.Figure()
+            fai = make_subplots(specs=[[{"secondary_y": True}]])
             cols = ['#8B5CF6', '#42D2E6', '#FF6475', '#FFB000', '#22C55E']
             for idx, m in enumerate(sai):
                 cc = cols[idx%len(cols)]
                 d1_a, v1 = get_agg_series(df_ai, [m], d_g1, freq, is_row_based=False)
-                draw_trend(fai, d1_a, v1, f"{m} (Pri)" if en_cmp else m, cc, False, True)
+                draw_trend(fai, d1_a, v1, f"{m} (Pri)" if en_cmp else m, cc, False, True, sec_y=False)
                 if en_cmp:
                     d2_a, v2 = get_agg_series(df_ai, [m], d_g2, freq, is_row_based=False)
-                    draw_trend(fai, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", cc, True)
+                    draw_trend(fai, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", cc, True, sec_y=False)
             apply_layout(fai); st.plotly_chart(fai, use_container_width=True)
             
 except Exception as e:
