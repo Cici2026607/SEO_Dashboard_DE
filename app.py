@@ -64,7 +64,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. 核心图表与数据处理工具集
+# 1. 核心数据处理工具集
 # ==========================================
 def hex_to_rgba(hex_color, alpha=0.1):
     hex_color = hex_color.lstrip('#')
@@ -99,7 +99,6 @@ def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
         if not c_tgt: return [], []
         
         dc = [c for c in df_src.columns if '日' in str(c) or 'date' in str(c).lower()][0]
-        # 使用 strftime 将日期格式化为纯净的 YYYY-MM-DD，以便精准匹配
         mask = df_src[dc].apply(lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else "").isin(dates)
         temp = df_src[mask].copy()
         temp['val'] = temp[c_tgt].apply(clean_val)
@@ -109,38 +108,9 @@ def get_agg_series(df_src, keys, dates, freq='D', agg='sum', is_row_based=True):
     res = temp.resample('D') if freq=='D' else (temp.resample('W-MON') if freq=='W' else temp.resample('ME'))
     df_agg = res.sum().fillna(0) if agg=='sum' else res.mean().fillna(0)
     
-    # 核心修复：直接返回 DatetimeIndex 给 Plotly，避免 X 轴文字挤压堆叠
     return df_agg.index, df_agg['val'].tolist()
 
-def draw_trend_simple(fig, x, y, name, color, is_cmp=False, fill=False):
-    dash = 'dash' if is_cmp else 'solid'
-    sz = 10 if is_cmp else 12
-    fc = hex_to_rgba(color, 0.1) if (fill and not is_cmp) else 'rgba(0,0,0,0)'
-    trace = go.Scatter(x=x, y=y, mode='lines+markers', name=name, 
-                       line=dict(color=color, width=3, dash=dash, shape='spline'), 
-                       marker=dict(size=sz, color=color, line=dict(width=2.5, color='white')), 
-                       fill='tozeroy' if fill and not is_cmp else 'none', fillcolor=fc)
-    fig.add_trace(trace)
-
-def draw_trend_dual(fig, x, y, name, color, is_cmp=False, fill=False, is_bar=False, sec_y=False, is_dot_line=False):
-    if is_bar:
-        c = 'rgba(142,140,167,0.3)' if is_cmp else hex_to_rgba(color, 0.65)
-        lc = '#8E8CA7' if is_cmp else color
-        trace = go.Bar(x=x, y=y, name=name, marker=dict(color=c, line=dict(color=lc, width=2)))
-    else:
-        dash = 'dash' if is_cmp else ('dot' if is_dot_line else 'solid')
-        sz = 10 if is_cmp else 12
-        fc = hex_to_rgba(color, 0.1) if (fill and not is_cmp) else 'rgba(0,0,0,0)'
-        trace = go.Scatter(x=x, y=y, mode='lines+markers', name=name, 
-                           line=dict(color=color, width=2 if is_dot_line else 3, dash=dash, shape='spline'), 
-                           marker=dict(size=sz, color=color, line=dict(width=2.5, color='white')), 
-                           fill='tozeroy' if fill and not is_cmp else 'none', fillcolor=fc)
-    fig.add_trace(trace, secondary_y=sec_y)
-
-def apply_layout(fig, prefix=""):
-    fig.update_layout(font=dict(family="Poppins", color="#8E8CA7"), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
-    fig.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
-    fig.update_yaxes(showgrid=True, gridcolor='#F0F1F6', tickprefix=prefix, secondary_y=False)
+font_style = dict(family="Poppins", color="#8E8CA7")
 
 # ==========================================
 # 2. Data Loaders
@@ -266,7 +236,6 @@ try:
         def get_yoy_data(key, y, is_gsc=False):
             res = {str(m):0.0 for m in range(1,13)}
             
-            # 解决11月份突降：如果是今年，强制只统计算到上个月
             last_valid_month = 12
             if y == c_yr:
                 last_valid_month = c_mo - 1 if c_mo > 1 else 1
@@ -293,7 +262,6 @@ try:
             vals = [res[str(m)] for m in range(1,13)]
             if all(v == 0 or v is None for v in vals): return []
             
-            # 强行过滤 2025年 GSC 数据：1到4月隐身，5月起跑
             if is_gsc and y == 2025:
                 vals = [None, None, None, None] + vals[4:]
             
@@ -365,7 +333,6 @@ try:
         fc1 = [c for c, d in d_map.items() if sd1 <= d <= ed1]
         fc2 = [c for c, d in d_map.items() if sd2 and sd2 <= d <= ed2] if en_cmp else []
         
-        # 核心修复：生成纯净的 YYYY-MM-DD 字符串列表用于底层匹配
         d_g1 = [d.strftime('%Y-%m-%d') for d in pd.date_range(sd1, ed1)]
         d_g2 = [d.strftime('%Y-%m-%d') for d in pd.date_range(sd2, ed2)] if en_cmp and sd2 else []
 
@@ -438,7 +405,9 @@ try:
         with cg:
             st.markdown(f'<div class="soft-card" style="height: 100%;"><p style="margin-bottom:12px; font-weight:700;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p><div style="display: flex; margin-top:16px;"><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p><p class="box-value-dark">{google_index:,.0f}</p>{f_cmp(google_index, c_google_index)}</div><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark">{google_backlinks:,.0f}</p>{f_cmp(google_backlinks, c_google_backlinks)}</div><div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark">{google_domain:,.0f}</p>{f_cmp(google_domain, c_google_domain)}</div></div></div>', unsafe_allow_html=True)
 
-        # 图表模块 (使用独立图表对象 draw_trend_simple 防止双轴冲突)
+        # ==========================================
+        # 6. 单一图表模块 (严格使用 draw_trend_simple，杜绝报错)
+        # ==========================================
         st.markdown('<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; border-radius: 16px;"><div class="flex-center"><div class="icon-small bg-red flex-center" style="justify-content:center; margin-bottom: 0;"><i class="fa-solid fa-chart-area"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Sales Trend Breakdown</span></div></div>', unsafe_allow_html=True)
         ss = st.multiselect("Sales", ['GA4 SEO销售额', 'Superset SEO销售额', 'AI Assistant 销售额'], default=['GA4 SEO销售额'], label_visibility="collapsed")
         fs = go.Figure()
@@ -449,8 +418,7 @@ try:
             draw_trend_simple(fs, d1_a, v1, f"{m} (Pri)" if en_cmp else m, sc[m], False, True)
             if en_cmp:
                 d2_a, v2 = get_agg_series(df_de, [k], fc2, freq)
-                xa = [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a
-                draw_trend_simple(fs, xa, v2, f"{m} (Cmp)", sc[m], True, False)
+                draw_trend_simple(fs, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", sc[m], True, False)
         apply_layout(fs, "$"); st.plotly_chart(fs, use_container_width=True)
         
         st.markdown('<div class="soft-card" style="padding: 16px 24px; margin-bottom: 16px; margin-top: 20px; border-radius: 16px;"><div class="flex-center"><div class="icon-small bg-blue flex-center" style="justify-content:center; margin-bottom: 0;"><i class="fa-solid fa-chart-line"></i></div><span class="text-main" style="font-weight:700; font-size:16px;">Traffic Breakdown</span></div></div>', unsafe_allow_html=True)
@@ -463,8 +431,7 @@ try:
             draw_trend_simple(ft, d1_a, v1, f"{m} (Pri)" if en_cmp else m, tc[m], False, True)
             if en_cmp:
                 d2_a, v2 = get_agg_series(df_de, [k], fc2, freq)
-                xa = [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a
-                draw_trend_simple(ft, xa, v2, f"{m} (Cmp)", tc[m], True, False)
+                draw_trend_simple(ft, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", tc[m], True, False)
         apply_layout(ft); st.plotly_chart(ft, use_container_width=True)
 
         if dc_gsc and not df_gsc.empty:
@@ -487,8 +454,7 @@ try:
                 draw_trend_simple(fg, d1_a, v1, f"{m} (Pri)" if en_cmp else m, gsc_c[idx], False, True)
                 if en_cmp:
                     d2_a, v2 = get_agg_series(df_gsc, [m], d_g2, freq, is_row_based=False)
-                    xa = [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a
-                    draw_trend_simple(fg, xa, v2, f"{m} (Cmp)", gsc_c[idx], True, False)
+                    draw_trend_simple(fg, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", gsc_c[idx], True, False)
             apply_layout(fg); st.plotly_chart(fg, use_container_width=True)
 
             g_tabs = st.tabs(gsc_metrics)
@@ -540,8 +506,7 @@ try:
                 draw_trend_simple(fai, d1_a, v1, f"{m} (Pri)" if en_cmp else m, cc, False, True)
                 if en_cmp:
                     d2_a, v2 = get_agg_series(df_ai, [m], d_g2, freq, is_row_based=False)
-                    xa = [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a
-                    draw_trend_simple(fai, xa, v2, f"{m} (Cmp)", cc, True, False)
+                    draw_trend_simple(fai, [f"P {j+1}" for j in range(max(len(v1), len(v2)))] if freq=='D' else d2_a, v2, f"{m} (Cmp)", cc, True, False)
             apply_layout(fai); st.plotly_chart(fai, use_container_width=True)
 
         # Raw Table
