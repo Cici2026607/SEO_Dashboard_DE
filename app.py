@@ -214,8 +214,10 @@ try:
                 load_gsc_data.clear()
                 load_ai_perf_data.clear()
                 st.rerun()
-        with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=6000.0, step=500.0)
-        with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=18000.0, step=1000.0)
+                
+        # --- 11月份新目标设定 ---
+        with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=14000.0, step=500.0)
+        with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=22000.0, step=1000.0)
                 
         # ==========================================
         # 2. 日期匹配与强力精准查表引擎
@@ -439,7 +441,7 @@ try:
                         except: pass
                         
             final_vals = [res_dict[str(m)] for m in range(1, 13)]
-            if all(v == 0 for v in final_vals): return []
+            if all(v == 0 or pd.isna(v) for v in final_vals): return []
             
             if is_gsc and target_year == 2025:
                 final_vals = [None, None, None, None] + final_vals[4:]
@@ -472,7 +474,6 @@ try:
                     fy.update_layout(**layout_yoy); fy.update_xaxes(showgrid=True, gridcolor='#F0F1F6'); fy.update_yaxes(showgrid=True, gridcolor='#F0F1F6')
                     st.plotly_chart(fy, use_container_width=True)
         with col_yoy_2:
-            # ⭐ 更新了标题，去掉了 YoY 强调，改为简单的月度对比
             st.markdown('<div class="soft-card" style="padding:16px 24px; margin-bottom:16px; border-radius:16px;"><div class="flex-center"><div class="icon-small bg-gray flex-center" style="margin-bottom:0;"><i class="fa-solid fa-robot"></i></div><span class="text-main" style="font-weight:700;">AI Assistant 数据月度对比</span></div></div>', unsafe_allow_html=True)
             a_tbs = st.tabs(['AI 贡献销售额月度对比', 'AI 来源流量月度对比'])
             with a_tbs[0]:
@@ -566,7 +567,9 @@ try:
             if agg == 'sum': df_agg = res.sum().fillna(0)
             else: df_agg = res.mean().fillna(0)
                 
-            return df_agg.index, df_agg['val'].tolist()
+            if freq == 'M': out_dates = df_agg.index.strftime('%Y-%m').tolist()
+            else: out_dates = df_agg.index.strftime('%Y-%m-%d').tolist()
+            return out_dates, df_agg['val'].tolist()
 
         # ==========================================
         # 5. 区间漏斗与资产
@@ -672,7 +675,7 @@ try:
 </div>
 """, unsafe_allow_html=True)
 
-        if date_col_gsc and not df_gsc.empty:
+        if date_col_gsc and not df_gsc_1.empty:
             gsc_metrics_list = ['点击（GSC）', '点击（非品牌词点击）', '点击（Blog）', '点击（非Blog）', '点击（非品牌词非Blog）', '点击（非品牌词非Blog非utm）']
             gsc_colors = ['#FF6475', '#42D2E6', '#FFB000', '#8B5CF6', '#2D235C', '#10B981']
             
@@ -709,7 +712,7 @@ try:
             gsc_html += '</div></div>\n'
             st.markdown(gsc_html, unsafe_allow_html=True)
 
-        if date_col_ai and not df_ai.empty:
+        if date_col_ai and not df_ai_1.empty:
             ai_metrics_cards = [
                 ("AI Performance（GSC）", ['aiperformance(gsc)', 'aiperformance(总)', 'aiperformance'], '#8B5CF6'),
                 ("AI Performance（非Blog）", ['aiperformance(非blog)'], '#42D2E6'),
@@ -839,8 +842,12 @@ try:
                     s_raw2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
                     _, s_trend2 = aggregate_trend(dates2, s_raw2, freq, 'sum') if s_raw2 else ([], [])
                     
-                    fig_sales.add_trace(go.Scatter(x=d_agg1, y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
-                    fig_sales.add_trace(go.Scatter(x=d_agg1, y=s_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
+                    max_len = max(len(s_trend1), len(s_trend2))
+                    prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                    x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+                    
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
             
         fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
         st.plotly_chart(fig_sales, use_container_width=True)
@@ -878,8 +885,12 @@ try:
                     t_raw2 = get_trend_series(search_names, filtered_cols_2) if filtered_cols_2 else []
                     _, t_trend2 = aggregate_trend(dates2, t_raw2, freq, 'sum') if t_raw2 else ([], [])
                     
-                    fig_traffic.add_trace(go.Scatter(x=d_agg1, y=t_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
-                    fig_traffic.add_trace(go.Scatter(x=d_agg1, y=t_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
+                    max_len = max(len(t_trend1), len(t_trend2))
+                    prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                    x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+                    
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend1)], y=t_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
+                    fig_traffic.add_trace(go.Scatter(x=x_axis[:len(t_trend2)], y=t_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
 
         fig_traffic.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
         st.plotly_chart(fig_traffic, use_container_width=True)
@@ -896,7 +907,7 @@ try:
                     c_clk = f"{seg}_点击" 
                 if c_clk not in df_source.columns:
                     for c in df_source.columns:
-                        if str(seg).replace(' ', '').replace('（', '(').replace('）', ')').lower() in str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower() and ('点击' in c or 'click' in c.lower()):
+                        if seg.replace(' ', '').replace('（', '(').replace('）', ')').lower() in str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower() and ('点击' in c or 'click' in c.lower()):
                             c_clk = c
                             break
                 if c_clk in df_source.columns:
@@ -930,8 +941,12 @@ try:
                         y_gsc2_raw = get_gsc_clicks_series(df_gsc_2, metric) if not df_gsc_2.empty else []
                         _, y_gsc2 = aggregate_trend(dates_g2, y_gsc2_raw, freq, 'sum') if y_gsc2_raw else ([], [])
                         
-                        fig_gsc_trend.add_trace(go.Scatter(x=d_agg1, y=y_gsc1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
-                        fig_gsc_trend.add_trace(go.Scatter(x=d_agg1, y=y_gsc2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
+                        max_len = max(len(y_gsc1), len(y_gsc2))
+                        prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                        x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+                        
+                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc1)], y=y_gsc1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
+                        fig_gsc_trend.add_trace(go.Scatter(x=x_axis[:len(y_gsc2)], y=y_gsc2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
                 
                 fig_gsc_trend.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=10), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
                 st.plotly_chart(fig_gsc_trend, use_container_width=True)
@@ -1000,11 +1015,15 @@ try:
                         _, y_ctr2 = aggregate_trend(dates_g2, y_ctr2_raw, freq, 'mean') if y_ctr2_raw else ([], [])
                         _, y_pos2 = aggregate_trend(dates_g2, y_pos2_raw, freq, 'mean') if y_pos2_raw else ([], [])
 
+                        max_len = max(len(y_clk1), len(y_clk2))
+                        prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                        x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+
                         fig_g1 = make_subplots(specs=[[{"secondary_y": True}]])
-                        fig_g1.add_trace(go.Bar(x=d_agg1, y=y_clk1, name="点击次数 (Pri)", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
-                        fig_g1.add_trace(go.Bar(x=d_agg1, y=y_clk2, name="点击次数 (Cmp)", marker=dict(color='rgba(142, 140, 167, 0.3)', line=dict(color='#8E8CA7', width=2))), secondary_y=False)
-                        fig_g1.add_trace(go.Scatter(x=d_agg1, y=y_imp1, mode='lines+markers', name="展示 (Pri)", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
-                        fig_g1.add_trace(go.Scatter(x=d_agg1, y=y_imp2, mode='lines+markers', name="展示 (Cmp)", line=dict(color='rgba(255, 100, 117, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=True)
+                        fig_g1.add_trace(go.Bar(x=x_axis[:len(y_clk1)], y=y_clk1, name="点击次数 (Pri)", marker=dict(color='rgba(66, 210, 230, 0.65)', line=dict(color='#42D2E6', width=2))), secondary_y=False)
+                        fig_g1.add_trace(go.Bar(x=x_axis[:len(y_clk2)], y=y_clk2, name="点击次数 (Cmp)", marker=dict(color='rgba(142, 140, 167, 0.3)', line=dict(color='#8E8CA7', width=2))), secondary_y=False)
+                        fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_imp1)], y=y_imp1, mode='lines+markers', name="展示 (Pri)", line=dict(color='#FF6475', width=3, shape='spline'), marker=dict(size=12, color='#FF6475', line=dict(width=2.5, color='white'))), secondary_y=True)
+                        fig_g1.add_trace(go.Scatter(x=x_axis[:len(y_imp2)], y=y_imp2, mode='lines+markers', name="展示 (Cmp)", line=dict(color='rgba(255, 100, 117, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=True)
 
                         fig_g1.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=280, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
                         fig_g1.update_xaxes(showgrid=True, gridcolor='#F0F1F6')
@@ -1012,10 +1031,10 @@ try:
                         st.plotly_chart(fig_g1, use_container_width=True)
                         
                         fig_g2 = make_subplots(specs=[[{"secondary_y": True}]])
-                        fig_g2.add_trace(go.Scatter(x=d_agg1, y=y_ctr1, mode='lines+markers', name="点击率 (Pri)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
-                        fig_g2.add_trace(go.Scatter(x=d_agg1, y=y_ctr2, mode='lines+markers', name="点击率 (Cmp)", line=dict(color='rgba(34, 197, 94, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=False)
-                        fig_g2.add_trace(go.Scatter(x=d_agg1, y=y_pos1, mode='lines+markers', name="排名 (Pri)", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
-                        fig_g2.add_trace(go.Scatter(x=d_agg1, y=y_pos2, mode='lines+markers', name="排名 (Cmp)", line=dict(color='rgba(139, 92, 246, 0.5)', width=2, dash='dash', shape='spline'), marker=dict(size=8)), secondary_y=True)
+                        fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr1)], y=y_ctr1, mode='lines+markers', name="点击率 (Pri)", line=dict(color='#22C55E', width=3, shape='spline'), marker=dict(size=12, color='#22C55E', line=dict(width=2.5, color='white'))), secondary_y=False)
+                        fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_ctr2)], y=y_ctr2, mode='lines+markers', name="点击率 (Cmp)", line=dict(color='rgba(34, 197, 94, 0.5)', width=3, dash='dash', shape='spline'), marker=dict(size=10)), secondary_y=False)
+                        fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos1)], y=y_pos1, mode='lines+markers', name="排名 (Pri)", line=dict(color='#8B5CF6', width=2, dash='dot', shape='spline'), marker=dict(size=10, color='#8B5CF6', line=dict(width=2, color='white'))), secondary_y=True)
+                        fig_g2.add_trace(go.Scatter(x=x_axis[:len(y_pos2)], y=y_pos2, mode='lines+markers', name="排名 (Cmp)", line=dict(color='rgba(139, 92, 246, 0.5)', width=2, dash='dash', shape='spline'), marker=dict(size=8)), secondary_y=True)
 
                         fig_g2.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=280, legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
                         fig_g2.update_yaxes(autorange="reversed", secondary_y=True) 
@@ -1048,8 +1067,12 @@ try:
                         y_ai2_raw = df_ai_2[metric].apply(clean_ai).fillna(0).tolist() if not df_ai_2.empty else []
                         _, y_ai2 = aggregate_trend(dates_a2, y_ai2_raw, freq, 'sum') if y_ai2_raw else ([], [])
                         
-                        fig_ai.add_trace(go.Scatter(x=d_agg1, y=y_ai1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white'))))
-                        fig_ai.add_trace(go.Scatter(x=d_agg1, y=y_ai2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=c_color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
+                        max_len = max(len(y_ai1), len(y_ai2))
+                        prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
+                        x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
+                        
+                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai1)], y=y_ai1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=c_color, width=3, shape='spline'), marker=dict(size=12, color=c_color, line=dict(width=2.5, color='white'))))
+                        fig_ai.add_trace(go.Scatter(x=x_axis[:len(y_ai2)], y=y_ai2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=c_color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
                 
                 fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
                 st.plotly_chart(fig_ai, use_container_width=True)
@@ -1070,7 +1093,7 @@ try:
 </div>
 """, unsafe_allow_html=True)
         df_display = df_de[['Metric'] + filtered_cols_1].copy()
-        df_display.columns = ['Metric'] + dates1
+        df_display.columns = ['Metric'] + [str(d) for d in pd.date_range(start_d1, end_d1)]
         df_display = df_display.set_index('Metric')
         st.dataframe(df_display, use_container_width=True, height=350)
         
