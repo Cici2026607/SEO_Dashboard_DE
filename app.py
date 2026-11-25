@@ -203,6 +203,11 @@ def load_geo_sales_data():
     ).fillna(0.0)
     return df.reset_index(drop=True)
 
+def hex_to_rgba(hex_color, alpha=0.1):
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return f'rgba({r}, {g}, {b}, {alpha})'
+
 try:
     with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
         df_de = load_and_clean_data()
@@ -365,7 +370,7 @@ try:
 </div>
 """, unsafe_allow_html=True)
 
-        # --- 新增: GEO 销售额 & 流量目标完成情况 ---
+        # --- GEO 销售额 & 流量目标完成情况 ---
         col_geo_t1, col_geo_t2 = st.columns(2)
         with col_geo_t1:
             st.markdown(f"""
@@ -461,7 +466,7 @@ try:
 </div>
 """, unsafe_allow_html=True)
 
-        # --- 新增: MTD Monitoring GEO 销售额 (Superset / GA4) & GEO 流量 (GA4) ---
+        # --- MTD Monitoring: GEO 销售额 (Superset / GA4) & GEO 流量 (GA4) ---
         mom_geo_sup_pct = ((mtd_geo_sales_superset - lm_geo_sales_superset) / lm_geo_sales_superset) * 100 if lm_geo_sales_superset > 0 else 0.0
         yoy_geo_sup_pct = ((mtd_geo_sales_superset - ly_geo_sales_superset) / ly_geo_sales_superset) * 100 if ly_geo_sales_superset > 0 else 0.0
         c4_m, bg4_m, arr4_m = get_trend_ui(mom_geo_sup_pct)
@@ -508,11 +513,6 @@ try:
         # ==========================================
         st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-solid fa-chart-line"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Annual Trends (YoY Overview)</h3></div>', unsafe_allow_html=True)
         st.caption("Auto-aggregated monthly trends comparing 2026 vs 2025 across all available data.")
-        
-        def hex_to_rgba(hex_color, alpha=0.1):
-            hex_color = hex_color.lstrip('#')
-            r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-            return f'rgba({r}, {g}, {b}, {alpha})'
             
         def get_yoy_data(key_words, target_year, is_gsc=False):
             res_dict = {str(m): 0.0 for m in range(1, 13)}
@@ -888,7 +888,7 @@ try:
             ai_perf_html += '</div></div>\n'
             st.markdown(ai_perf_html, unsafe_allow_html=True)
 
-        # --- 更新: 原 AI Assistant 板块更名为 GEO 数据 (展示 Superset 销售额 + GA4 销售额 + GA4 流量) ---
+        # --- GEO 数据 (Superset 销售额 + GA4 销售额 + GA4 流量) & Google Assets ---
         col_geo, col_google = st.columns(2)
         with col_geo:
             st.markdown(f"""
@@ -915,7 +915,7 @@ try:
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细 
+        # 6. 图表与明细
         # ==========================================
         def get_trend_series(possible_names, cols, is_curr=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
@@ -1227,8 +1227,6 @@ try:
                 
                 fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
                 st.plotly_chart(fig_ai, use_container_width=True)
-            elif df_ai_1.empty:
-                st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
         # 10. Raw Tables
