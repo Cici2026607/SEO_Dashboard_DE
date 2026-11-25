@@ -131,8 +131,8 @@ def load_and_clean_data():
     
     df_raw = pd.read_csv(bust_url, header=None)
 
-    col0_raw = df_raw.iloc[:, 0].astype(str).str.strip()
-    col0_norm = col0_raw.apply(lambda s: re.sub(r'[\s\u3000\-_.·/（）()【】\[\]]+', '', s).lower())
+    col0_raw = df_raw.iloc[:, 0].fillna('').astype(str).str.strip()
+    col0_norm = col0_raw.apply(lambda s: re.sub(r'[\s\u3000\-_.·/（）()【】\[\]]+', '', '' if pd.isna(s) else str(s)).lower())
 
     # 扫描全表找到所有日期表头行
     date_rows = [r for r in range(len(df_raw)) if count_dates_in_row(df_raw.iloc[r]) >= 5]
@@ -195,16 +195,16 @@ def load_and_clean_data():
     for i, col in enumerate(raw_columns):
         if i == 0: clean_columns.append("Metric")
         else:
-            col_str = str(col).strip()
-            if pd.isna(col) or col_str == '' or col_str.lower() == 'nan': clean_columns.append(f"空列_{i}")
+            col_str = '' if pd.isna(col) else str(col).strip()
+            if col_str == '' or col_str.lower() == 'nan': clean_columns.append(f"空列_{i}")
             elif col_str in clean_columns: clean_columns.append(f"{col_str}_重复_{i}")
             else: clean_columns.append(col_str)
                 
     df_de.columns = clean_columns
     df_de.reset_index(drop=True, inplace=True)
-    df_de['Metric'] = df_de['Metric'].astype(str).str.strip()
+    df_de['Metric'] = df_de['Metric'].fillna('').astype(str).str.strip()
     df_de['Metric_Norm'] = df_de['Metric'].str.replace(' ', '', regex=False).str.lower()
-    df_de = df_de[df_de['Metric'].notna() & (df_de['Metric'] != '') & (df_de['Metric'].str.lower() != 'nan')]
+    df_de = df_de[(df_de['Metric'] != '') & (df_de['Metric'].str.lower() != 'nan')]
     cols_to_keep = [c for c in df_de.columns if "空列_" not in c]
 
     debug_info = {
@@ -229,9 +229,9 @@ def load_gsc_data():
     
     new_cols = []
     for c, m in zip(row0, row1):
-        c_str = str(c).strip()
-        m_str = str(m).strip()
-        if '日' in m_str or 'date' in m_str.lower() or pd.isna(c) or c_str == 'nan':
+        c_str = '' if pd.isna(c) else str(c).strip()
+        m_str = '' if pd.isna(m) else str(m).strip()
+        if '日' in m_str or 'date' in m_str.lower() or c_str == '' or c_str.lower() == 'nan':
             new_cols.append(m_str)
         else:
             new_cols.append(f"{c_str}_{m_str}")
@@ -261,9 +261,9 @@ def load_ai_perf_data():
     
     new_cols = []
     for c, m in zip(row0, row1):
-        c_str = str(c).strip()
-        m_str = str(m).strip()
-        if '日' in m_str or 'date' in m_str.lower() or pd.isna(c) or c_str == 'nan':
+        c_str = '' if pd.isna(c) else str(c).strip()
+        m_str = '' if pd.isna(m) else str(m).strip()
+        if '日' in m_str or 'date' in m_str.lower() or c_str == '' or c_str.lower() == 'nan':
             new_cols.append(m_str)
         else:
             new_cols.append(f"{c_str}_{m_str}")
@@ -291,7 +291,7 @@ def load_geo_sales_data():
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
     df = df.dropna(subset=['Date']).sort_values('Date')
     df['GEO_Sales'] = pd.to_numeric(
-        df['GEO_Sales'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip(),
+        df['GEO_Sales'].fillna('').astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip(),
         errors='coerce'
     ).fillna(0.0)
     return df
@@ -390,7 +390,7 @@ try:
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
-                    vals = data[valid_cols].iloc[0].astype(str).str.replace(',', '', regex=False)
+                    vals = data[valid_cols].iloc[0].fillna('').astype(str).str.replace(',', '', regex=False)
                     if is_currency: vals = vals.str.replace('$', '', regex=False)
                     return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0.0
@@ -812,7 +812,7 @@ try:
         if not bounce_data.empty and filtered_cols_1:
             valid_br_cols = [c for c in filtered_cols_1 if c in bounce_data.columns]
             if valid_br_cols:
-                br_vals = bounce_data[valid_br_cols].iloc[0].astype(str).str.replace('%', '', regex=False)
+                br_vals = bounce_data[valid_br_cols].iloc[0].fillna('').astype(str).str.replace('%', '', regex=False)
                 br_series = pd.to_numeric(br_vals, errors='coerce').dropna()
                 if not br_series.empty: int_bounce_rate = br_series.mean()
 
@@ -854,7 +854,7 @@ try:
         if not bounce_data.empty and filtered_cols_2:
             valid_br_cols_c = [c for c in filtered_cols_2 if c in bounce_data.columns]
             if valid_br_cols_c:
-                br_vals_c = bounce_data[valid_br_cols_c].iloc[0].astype(str).str.replace('%', '', regex=False)
+                br_vals_c = bounce_data[valid_br_cols_c].iloc[0].fillna('').astype(str).str.replace('%', '', regex=False)
                 br_series_c = pd.to_numeric(br_vals_c, errors='coerce').dropna()
                 if not br_series_c.empty: comp_bounce_rate = br_series_c.mean()
 
@@ -956,12 +956,12 @@ try:
                     for c in df_source.columns:
                         c_clean = str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower()
                         if f"{k_clean}_展示" in c_clean or f"{k_clean}_impressions" in c_clean or k_clean == c_clean:
-                            vals = df_source[c].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
+                            vals = df_source[c].fillna('').astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
                             return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
                     for c in df_source.columns:
                         c_clean = str(c).replace(' ', '').replace('（', '(').replace('）', ')').lower()
                         if k_clean in c_clean:
-                            vals = df_source[c].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
+                            vals = df_source[c].fillna('').astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False)
                             return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
                 return 0.0
 
@@ -1028,7 +1028,7 @@ try:
             if not data.empty and cols:
                 valid_cols = [c for c in cols if c in data.columns]
                 if valid_cols:
-                    vals = data[valid_cols].iloc[0].astype(str).str.replace(',', '', regex=False)
+                    vals = data[valid_cols].iloc[0].fillna('').astype(str).str.replace(',', '', regex=False)
                     if is_curr: vals = vals.str.replace('$', '', regex=False)
                     return pd.to_numeric(vals, errors='coerce').fillna(0).tolist()
             return []
