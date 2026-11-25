@@ -56,8 +56,6 @@ st.markdown("""
     .progress-track { background-color: #F0F1F6; border-radius: 999px; height: 18px; width: 100%; position: relative; }
     .progress-fill-red { background: linear-gradient(90deg, #FF8491 0%, #FF6475 100%); height: 100%; border-radius: 999px; transition: width 0.8s ease; box-shadow: 0 6px 16px -4px rgba(255, 100, 117, 0.6); }
     .progress-fill-blue { background: linear-gradient(90deg, #6BE1F0 0%, #42D2E6 100%); height: 100%; border-radius: 999px; transition: width 0.8s ease; box-shadow: 0 6px 16px -4px rgba(66, 210, 230, 0.6); }
-    .progress-fill-purple { background: linear-gradient(90deg, #A78BFA 0%, #8B5CF6 100%); height: 100%; border-radius: 999px; transition: width 0.8s ease; box-shadow: 0 6px 16px -4px rgba(139, 92, 246, 0.6); }
-    .progress-fill-green { background: linear-gradient(90deg, #34D399 0%, #10B981 100%); height: 100%; border-radius: 999px; transition: width 0.8s ease; box-shadow: 0 6px 16px -4px rgba(16, 185, 129, 0.6); }
     .rocket-icon { position: absolute; right: -12px; top: -6px; font-size: 22px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15)); }
     
     .icon-square { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 16px; margin-right: 16px; font-size: 22px; }
@@ -187,27 +185,6 @@ def load_ai_perf_data():
         df = df.dropna(subset=[date_col]).sort_values(date_col)
     return df, date_col
 
-@st.cache_data(ttl=300)
-def load_geo_sales_data():
-    geo_url = "https://docs.google.com/spreadsheets/d/1taQD16KiTD5fqERfTo4EerlmfAUAdaXAZCUMMddRjJ8/export?format=csv&gid=0"
-    df_raw = pd.read_csv(geo_url, header=None)
-    if df_raw.shape[1] < 2:
-        return pd.DataFrame(columns=['Date', 'GEO_Sales'])
-    df = df_raw.iloc[:, :2].copy()
-    df.columns = ['Date', 'GEO_Sales']
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
-    df = df.dropna(subset=['Date']).sort_values('Date')
-    df['GEO_Sales'] = pd.to_numeric(
-        df['GEO_Sales'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip(),
-        errors='coerce'
-    ).fillna(0.0)
-    return df.reset_index(drop=True)
-
-def hex_to_rgba(hex_color, alpha=0.1):
-    hex_color = hex_color.lstrip('#')
-    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-    return f'rgba({r}, {g}, {b}, {alpha})'
-
 try:
     with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
         df_de = load_and_clean_data()
@@ -215,8 +192,6 @@ try:
         except Exception: df_gsc, date_col_gsc = pd.DataFrame(), None
         try: df_ai, date_col_ai = load_ai_perf_data()
         except Exception: df_ai, date_col_ai = pd.DataFrame(), None
-        try: df_geo = load_geo_sales_data()
-        except Exception: df_geo = pd.DataFrame(columns=['Date', 'GEO_Sales'])
 
         # ==========================================
         # ⭐ T-2 GA 数据延迟基准日逻辑
@@ -232,21 +207,17 @@ try:
 </div>
 """, unsafe_allow_html=True)
         
-        col_btn, col_target1, col_target2, col_target3, col_target4 = st.columns([1.3, 1.5, 1.5, 1.5, 1.5])
+        col_btn, col_target1, col_target2 = st.columns([1.5, 2, 2])
         with col_btn:
-            st.markdown('<div style="margin-top:24px;"></div>', unsafe_allow_html=True)
-            if st.button("🔄 Sync Data"):
+            if st.button("🔄 Sync Data (刷新底层缓存)"):
                 load_and_clean_data.clear()
                 load_gsc_data.clear()
                 load_ai_perf_data.clear()
-                load_geo_sales_data.clear()
                 st.rerun()
                 
-        # --- 11月份目标设定 (SEO + GEO) ---
-        with col_target1: target_sales = st.number_input("🎯 SEO Sales Target ($)", value=14000.0, step=500.0)
-        with col_target2: target_traffic = st.number_input("⚡ SEO Traffic Target", value=22000.0, step=1000.0)
-        with col_target3: target_geo_sales = st.number_input("🤖 GEO Sales Target ($)", value=4000.0, step=200.0)
-        with col_target4: target_geo_traffic = st.number_input("🚀 GEO Traffic Target", value=1000.0, step=100.0)
+        # --- 11月份新目标设定 ---
+        with col_target1: target_sales = st.number_input("🎯 DE Sales Target ($)", value=14000.0, step=500.0)
+        with col_target2: target_traffic = st.number_input("⚡ DE Traffic Target", value=22000.0, step=1000.0)
                 
         # ==========================================
         # 2. 日期匹配与强力精准查表引擎
@@ -257,7 +228,6 @@ try:
                 try: date_mapping[col] = pd.to_datetime(col).date()
                 except: pass
         
-        mtd_start = date(current_year, current_month, 1)
         mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
         lm_year = current_year if current_month > 1 else current_year - 1
         lm_month = current_month - 1 if current_month > 1 else 12
@@ -300,12 +270,6 @@ try:
                     return pd.to_numeric(vals, errors='coerce').fillna(0).sum()
             return 0.0
 
-        def get_geo_superset_sum(start_d, end_d):
-            if df_geo is None or df_geo.empty or start_d is None or end_d is None:
-                return 0.0
-            mask = (df_geo['Date'] >= start_d) & (df_geo['Date'] <= end_d)
-            return float(df_geo.loc[mask, 'GEO_Sales'].sum())
-
         mtd_sales = get_sum(['ga4seo销售额'], mtd_cols, True)
         lm_sales = get_sum(['ga4seo销售额'], lm_cols, True)
         ly_sales = get_sum(['ga4seo销售额'], ly_cols, True)
@@ -314,28 +278,10 @@ try:
         lm_traffic = get_sum(['seo流量'], lm_cols)
         ly_traffic = get_sum(['seo流量'], ly_cols)
 
-        # GEO MTD 数据 (Superset 销售额 + GA4 销售额 + GA4 流量)
-        mtd_geo_sales_superset = get_geo_superset_sum(mtd_start, data_date)
-        lm_geo_sales_superset = get_geo_superset_sum(lm_start, lm_end)
-        ly_geo_sales_superset = get_geo_superset_sum(ly_start, ly_end)
-
-        mtd_geo_sales_ga4 = get_sum(['aiassistant销售额'], mtd_cols, True)
-        lm_geo_sales_ga4 = get_sum(['aiassistant销售额'], lm_cols, True)
-        ly_geo_sales_ga4 = get_sum(['aiassistant销售额'], ly_cols, True)
-
-        mtd_geo_traffic = get_sum(['aiassistant流量'], mtd_cols)
-        lm_geo_traffic = get_sum(['aiassistant流量'], lm_cols)
-        ly_geo_traffic = get_sum(['aiassistant流量'], ly_cols)
-
         prog_sales = min(mtd_sales / target_sales, 1.0) if target_sales > 0 else 0
         prog_traffic = min(mtd_traffic / target_traffic, 1.0) if target_traffic > 0 else 0
         gap_sales = max(0, target_sales - mtd_sales)
         gap_traffic = max(0, target_traffic - mtd_traffic)
-
-        prog_geo_sales = min(mtd_geo_sales_superset / target_geo_sales, 1.0) if target_geo_sales > 0 else 0
-        prog_geo_traffic = min(mtd_geo_traffic / target_geo_traffic, 1.0) if target_geo_traffic > 0 else 0
-        gap_geo_sales = max(0, target_geo_sales - mtd_geo_sales_superset)
-        gap_geo_traffic = max(0, target_geo_traffic - mtd_geo_traffic)
 
         st.markdown('<div class="flex-center" style="margin:20px 0;"><div class="icon-square bg-orange"><i class="fa-solid fa-bullseye"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Target Achievement (Monat)</h3></div>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
@@ -367,39 +313,6 @@ try:
 </div>
 <div class="progress-track"><div class="progress-fill-blue" style="width: {prog_traffic*100}%;"></div><span class="rocket-icon">⚡</span></div>
 <div style="text-align: right; margin-top: 16px;"><span style="color: #42D2E6; font-weight: 800; font-size: 18px;">{prog_traffic*100:.1f}%</span></div>
-</div>
-""", unsafe_allow_html=True)
-
-        # --- GEO 销售额 & 流量目标完成情况 ---
-        col_geo_t1, col_geo_t2 = st.columns(2)
-        with col_geo_t1:
-            st.markdown(f"""
-<div class="soft-card">
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-<div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-robot" style="color:#8B5CF6; margin-right:8px;"></i> GEO Sales Progress (Superset Data)</div>
-<div style="color: #8B5CF6; font-size: 14px; font-weight: 700;">Gap: $ {gap_geo_sales:,.2f}</div>
-</div>
-<div style="margin-bottom: 28px; display: flex; align-items: baseline;">
-<span class="text-main" style="font-size: 38px; font-weight: 700;">$ {mtd_geo_sales_superset:,.2f}</span>
-<span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ $ {target_geo_sales:,.2f}</span>
-</div>
-<div class="progress-track"><div class="progress-fill-purple" style="width: {prog_geo_sales*100}%;"></div><span class="rocket-icon">🤖</span></div>
-<div style="text-align: right; margin-top: 16px;"><span style="color: #8B5CF6; font-weight: 800; font-size: 18px;">{prog_geo_sales*100:.1f}%</span></div>
-</div>
-""", unsafe_allow_html=True)
-        with col_geo_t2:
-            st.markdown(f"""
-<div class="soft-card">
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-<div class="flex-center text-muted" style="font-size: 15px; font-weight: 500;"><i class="fa-solid fa-bolt" style="color:#10B981; margin-right:8px;"></i> GEO Traffic Progress (GA4 Data)</div>
-<div style="color: #10B981; font-size: 14px; font-weight: 700;">Gap: {gap_geo_traffic:,.0f}</div>
-</div>
-<div style="margin-bottom: 28px; display: flex; align-items: baseline;">
-<span class="text-main" style="font-size: 38px; font-weight: 700;">{mtd_geo_traffic:,.0f}</span>
-<span class="text-muted" style="font-size: 16px; margin-left: 8px;">/ {target_geo_traffic:,.0f}</span>
-</div>
-<div class="progress-track"><div class="progress-fill-green" style="width: {prog_geo_traffic*100}%;"></div><span class="rocket-icon">🚀</span></div>
-<div style="text-align: right; margin-top: 16px;"><span style="color: #10B981; font-weight: 800; font-size: 18px;">{prog_geo_traffic*100:.1f}%</span></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -449,6 +362,7 @@ try:
                 return pd.to_numeric(str(s).replace(',', '').replace('%', ''), errors='coerce')
             return sub_df[c_clk].apply(clean_val).fillna(0).sum()
 
+        mtd_start = date(current_year, current_month, 1)
         mtd_gsc = get_gsc_period_sum(mtd_start, data_date)
         lm_gsc = get_gsc_period_sum(lm_start, lm_end)
         ly_gsc = get_gsc_period_sum(ly_start, ly_end)
@@ -466,46 +380,6 @@ try:
 </div>
 """, unsafe_allow_html=True)
 
-        # --- MTD Monitoring: GEO 销售额 (Superset / GA4) & GEO 流量 (GA4) ---
-        mom_geo_sup_pct = ((mtd_geo_sales_superset - lm_geo_sales_superset) / lm_geo_sales_superset) * 100 if lm_geo_sales_superset > 0 else 0.0
-        yoy_geo_sup_pct = ((mtd_geo_sales_superset - ly_geo_sales_superset) / ly_geo_sales_superset) * 100 if ly_geo_sales_superset > 0 else 0.0
-        c4_m, bg4_m, arr4_m = get_trend_ui(mom_geo_sup_pct)
-        c4_y, bg4_y, arr4_y = get_trend_ui(yoy_geo_sup_pct)
-
-        st.markdown(f"""
-<div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
-<div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">GEO 销售额 MTD (Superset) <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">$ {mtd_geo_sales_superset:,.2f}</h2></div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {lm_geo_sales_superset:,.2f}</h2><span style="color: {c4_m}; font-weight: 600; background: {bg4_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr4_m} {abs(mom_geo_sup_pct):.1f}% MoM</span></div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {ly_geo_sales_superset:,.2f}</h2><span style="color: {c4_y}; font-weight: 600; background: {bg4_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr4_y} {abs(yoy_geo_sup_pct):.1f}% YoY</span></div>
-</div>
-""", unsafe_allow_html=True)
-
-        mom_geo_ga4_pct = ((mtd_geo_sales_ga4 - lm_geo_sales_ga4) / lm_geo_sales_ga4) * 100 if lm_geo_sales_ga4 > 0 else 0.0
-        yoy_geo_ga4_pct = ((mtd_geo_sales_ga4 - ly_geo_sales_ga4) / ly_geo_sales_ga4) * 100 if ly_geo_sales_ga4 > 0 else 0.0
-        c5_m, bg5_m, arr5_m = get_trend_ui(mom_geo_ga4_pct)
-        c5_y, bg5_y, arr5_y = get_trend_ui(yoy_geo_ga4_pct)
-
-        st.markdown(f"""
-<div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
-<div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">GEO 销售额 MTD (GA4) <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">$ {mtd_geo_sales_ga4:,.2f}</h2></div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {lm_geo_sales_ga4:,.2f}</h2><span style="color: {c5_m}; font-weight: 600; background: {bg5_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr5_m} {abs(mom_geo_ga4_pct):.1f}% MoM</span></div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">$ {ly_geo_sales_ga4:,.2f}</h2><span style="color: {c5_y}; font-weight: 600; background: {bg5_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr5_y} {abs(yoy_geo_ga4_pct):.1f}% YoY</span></div>
-</div>
-""", unsafe_allow_html=True)
-
-        mom_geo_trf_pct = ((mtd_geo_traffic - lm_geo_traffic) / lm_geo_traffic) * 100 if lm_geo_traffic > 0 else 0.0
-        yoy_geo_trf_pct = ((mtd_geo_traffic - ly_geo_traffic) / ly_geo_traffic) * 100 if ly_geo_traffic > 0 else 0.0
-        c6_m, bg6_m, arr6_m = get_trend_ui(mom_geo_trf_pct)
-        c6_y, bg6_y, arr6_y = get_trend_ui(yoy_geo_trf_pct)
-
-        st.markdown(f"""
-<div class="soft-card" style="display: flex; justify-content: space-between; text-align: left; padding-bottom:30px;">
-<div style="flex: 1;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">GEO 流量 MTD (GA4) <span class="compare-date-str">{curr_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 32px;">{mtd_geo_traffic:,.0f}</h2></div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Month <span class="compare-date-str">{lm_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{lm_geo_traffic:,.0f}</h2><span style="color: {c6_m}; font-weight: 600; background: {bg6_m}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr6_m} {abs(mom_geo_trf_pct):.1f}% MoM</span></div>
-<div style="flex: 1; border-left: 2px solid #F0F1F6; padding-left: 30px;"><p class="text-muted" style="font-size: 14px; margin-bottom: 8px;">Last Year <span class="compare-date-str">{ly_str}</span></p><h2 class="text-main" style="margin: 0; font-size: 26px; margin-bottom: 12px;">{ly_geo_traffic:,.0f}</h2><span style="color: {c6_y}; font-weight: 600; background: {bg6_y}; padding: 4px 12px; border-radius: 8px; font-size: 13px;">{arr6_y} {abs(yoy_geo_trf_pct):.1f}% YoY</span></div>
-</div>
-""", unsafe_allow_html=True)
-
         st.markdown('<br><hr style="border:1px solid #E2E8F0; margin: 20px 0;"><br>', unsafe_allow_html=True)
 
         # ==========================================
@@ -513,6 +387,11 @@ try:
         # ==========================================
         st.markdown('<div class="flex-center" style="margin-bottom:6px;"><div class="icon-square bg-blue"><i class="fa-solid fa-chart-line"></i></div><h3 class="text-main" style="margin:0; font-size:22px;">Annual Trends (YoY Overview)</h3></div>', unsafe_allow_html=True)
         st.caption("Auto-aggregated monthly trends comparing 2026 vs 2025 across all available data.")
+        
+        def hex_to_rgba(hex_color, alpha=0.1):
+            hex_color = hex_color.lstrip('#')
+            r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            return f'rgba({r}, {g}, {b}, {alpha})'
             
         def get_yoy_data(key_words, target_year, is_gsc=False):
             res_dict = {str(m): 0.0 for m in range(1, 13)}
@@ -520,6 +399,7 @@ try:
             if target_year == current_year:
                 last_valid_month = current_month - 1 if current_month > 1 else 1
 
+            # 核心安全清洗：剔除 nan，解决 AI Assistant 提取时的 float 报错
             def safe_clean(x):
                 if pd.isna(x) or str(x).strip() == '' or str(x).strip().lower() == 'nan': return 0.0
                 v = pd.to_numeric(str(x).replace(',', '').replace('$', '').replace('%', ''), errors='coerce')
@@ -676,20 +556,6 @@ try:
         else:
             df_ai_1, df_ai_2, dates_a1, dates_a2 = pd.DataFrame(), pd.DataFrame(), [], []
 
-        if df_geo is not None and not df_geo.empty:
-            mask_geo1 = (df_geo['Date'] >= start_d1) & (df_geo['Date'] <= end_d1)
-            df_geo_1 = df_geo[mask_geo1].copy()
-            dates_geo1 = df_geo_1['Date'].astype(str).tolist()
-            if enable_compare and start_d2:
-                mask_geo2 = (df_geo['Date'] >= start_d2) & (df_geo['Date'] <= end_d2)
-                df_geo_2 = df_geo[mask_geo2].copy()
-                dates_geo2 = df_geo_2['Date'].astype(str).tolist()
-            else:
-                df_geo_2 = pd.DataFrame(columns=['Date', 'GEO_Sales'])
-                dates_geo2 = []
-        else:
-            df_geo_1, df_geo_2, dates_geo1, dates_geo2 = pd.DataFrame(columns=['Date', 'GEO_Sales']), pd.DataFrame(columns=['Date', 'GEO_Sales']), [], []
-
         def aggregate_trend(raw_dates, raw_values, freq='D', agg='sum'):
             if not raw_dates or not raw_values or len(raw_dates) == 0: return [], []
             df_temp = pd.DataFrame({'date': pd.to_datetime(raw_dates), 'val': raw_values})
@@ -726,7 +592,6 @@ try:
         int_super_sales = get_sum(['supersetseo销售额'], filtered_cols_1, True)
         ai_sales = get_sum(['aiassistant销售额'], filtered_cols_1, True)
         ai_traffic = get_sum(['aiassistant流量'], filtered_cols_1)
-        geo_superset_sales = float(df_geo_1['GEO_Sales'].sum()) if not df_geo_1.empty else 0.0
         
         def get_latest(possible_names, cols):
             if isinstance(possible_names, str): possible_names = [possible_names]
@@ -768,7 +633,6 @@ try:
         comp_super_sales = get_sum(['supersetseo销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
         comp_ai_sales = get_sum(['aiassistant销售额'], filtered_cols_2, True) if filtered_cols_2 else 0
         comp_ai_traffic = get_sum(['aiassistant流量'], filtered_cols_2) if filtered_cols_2 else 0
-        comp_geo_superset_sales = float(df_geo_2['GEO_Sales'].sum()) if (enable_compare and not df_geo_2.empty) else 0.0
         comp_google_index = get_latest('收录', filtered_cols_2) if filtered_cols_2 else 0
         comp_google_backlinks = get_latest('外链', filtered_cols_2) if filtered_cols_2 else 0
         comp_google_domain = get_latest('外链域名广度', filtered_cols_2) if filtered_cols_2 else 0
@@ -839,7 +703,7 @@ try:
                 v1 = get_gsc_clicks_sum_local(df_gsc_1, m_name)
                 v2 = get_gsc_clicks_sum_local(df_gsc_2, m_name) if enable_compare else 0
                 c_hex = gsc_colors[idx]
-                gsc_html += f'<div class="inner-box box-light" style="margin-right: 0;">\n'
+                gsc_html += f'<div class="inner-box box-light">\n'
                 gsc_html += f'<p class="box-label text-muted" style="margin-bottom:8px;"><i class="fa-solid fa-circle" style="color:{c_hex}; font-size:8px; margin-right:8px;"></i> {m_name}</p>\n'
                 gsc_html += f'<p class="box-value-dark" style="margin: 0; font-size: 28px;">{v1:,.0f}</p>\n'
                 gsc_html += f'{format_cmp(v1, v2)}\n'
@@ -879,7 +743,7 @@ try:
             for m_name, target_keys, c_hex in ai_metrics_cards:
                 v1_ai = get_ai_perf_sum_local(df_ai_1, target_keys)
                 v2_ai = get_ai_perf_sum_local(df_ai_2, target_keys) if enable_compare else 0
-                ai_perf_html += f'<div class="inner-box box-light" style="margin-right: 0;">\n'
+                ai_perf_html += f'<div class="inner-box box-light">\n'
                 ai_perf_html += f'<p class="box-label text-muted" style="margin-bottom:8px;"><i class="fa-solid fa-circle" style="color:{c_hex}; font-size:8px; margin-right:8px;"></i> {m_name}</p>\n'
                 ai_perf_html += f'<p class="box-value-dark" style="margin: 0; font-size: 28px;">{v1_ai:,.0f}</p>\n'
                 ai_perf_html += f'{format_cmp(v1_ai, v2_ai)}\n'
@@ -888,16 +752,14 @@ try:
             ai_perf_html += '</div></div>\n'
             st.markdown(ai_perf_html, unsafe_allow_html=True)
 
-        # --- GEO 数据 (Superset 销售额 + GA4 销售额 + GA4 流量) & Google Assets ---
-        col_geo, col_google = st.columns(2)
-        with col_geo:
+        col_ai, col_google = st.columns(2)
+        with col_ai:
             st.markdown(f"""
 <div class="soft-card" style="height: 100%;">
-<p class="asset-card-title" style="margin-bottom:12px; font-weight:700; font-size:16px;"><span class="icon-small bg-purple flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-solid fa-robot"></i></span> GEO 数据</p>
-<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top:16px;">
-<div class="inner-box box-deep" style="margin-right:0; padding:18px 16px;"><p class="box-label" style="color:rgba(255,255,255,0.85); font-size:12px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:6px;"></i> GEO销售额（Superset）</p><p class="box-value-white" style="margin: 0; font-size:24px;">$ {geo_superset_sales:,.2f}</p>{format_cmp(geo_superset_sales, comp_geo_superset_sales, is_curr=True, dark_bg=True)}</div>
-<div class="inner-box box-light" style="margin-right:0; padding:18px 16px;"><p class="box-label text-muted" style="font-size:12px;"><i class="fa-solid fa-circle" style="color:#8B5CF6; font-size:8px; margin-right:6px;"></i> GEO销售额（GA4）</p><p class="box-value-dark" style="margin: 0; font-size:24px;">$ {ai_sales:,.2f}</p>{format_cmp(ai_sales, comp_ai_sales, is_curr=True)}</div>
-<div class="inner-box box-light" style="margin-right:0; padding:18px 16px;"><p class="box-label text-muted" style="font-size:12px;"><i class="fa-solid fa-circle" style="color:#10B981; font-size:8px; margin-right:6px;"></i> GEO流量（GA4）</p><p class="box-value-dark" style="margin: 0; font-size:24px;">{ai_traffic:,.0f}</p>{format_cmp(ai_traffic, comp_ai_traffic)}</div>
+<p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-purple flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-solid fa-robot"></i></span> AI Assistant</p>
+<div style="display: flex; margin-top:16px;">
+<div class="inner-box box-deep"><p class="box-label" style="color:rgba(255,255,255,0.8);"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> AI Sales</p><p class="box-value-white" style="margin: 0;">$ {ai_sales:,.2f}</p>{format_cmp(ai_sales, comp_ai_sales, is_curr=True, dark_bg=True)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#2D235C; font-size:8px; margin-right:8px;"></i> AI Traffic</p><p class="box-value-dark" style="margin: 0;">{ai_traffic:,.0f}</p>{format_cmp(ai_traffic, comp_ai_traffic)}</div>
 </div>
 </div>
 """, unsafe_allow_html=True)
@@ -905,18 +767,23 @@ try:
         with col_google:
             st.markdown(f"""
 <div class="soft-card" style="height: 100%;">
-<p class="asset-card-title" style="margin-bottom:12px; font-weight:700; font-size:16px;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p>
-<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top:16px;">
-<div class="inner-box box-light" style="margin-right:0; padding:18px 16px;"><p class="box-label text-muted" style="font-size:12px;"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:6px;"></i> Indexing</p><p class="box-value-dark" style="margin: 0; font-size:24px;">{google_index:,.0f}</p>{format_cmp(google_index, comp_google_index)}</div>
-<div class="inner-box box-light" style="margin-right:0; padding:18px 16px;"><p class="box-label text-muted" style="font-size:12px;"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:6px;"></i> Backlinks</p><p class="box-value-dark" style="margin: 0; font-size:24px;">{google_backlinks:,.0f}</p>{format_cmp(google_backlinks, comp_google_backlinks)}</div>
-<div class="inner-box box-light" style="margin-right:0; padding:18px 16px;"><p class="box-label text-muted" style="font-size:12px;"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:6px;"></i> Domains</p><p class="box-value-dark" style="margin: 0; font-size:24px;">{google_domain:,.0f}</p>{format_cmp(google_domain, comp_google_domain)}</div>
+<p class="asset-card-title" style="margin-bottom:12px;"><span class="icon-small bg-orange flex-center" style="display:inline-flex; justify-content:center; margin-bottom:-4px;"><i class="fa-brands fa-google"></i></span> Google Assets</p>
+<div style="display: flex; margin-top:16px;">
+<div class="inner-box box-light" style="flex: 1.2;"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FFB000; font-size:8px; margin-right:8px;"></i> Indexing</p><p class="box-value-dark" style="margin: 0;">{google_index:,.0f}</p>{format_cmp(google_index, comp_google_index)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#FF6475; font-size:8px; margin-right:8px;"></i> Backlinks</p><p class="box-value-dark" style="margin: 0;">{google_backlinks:,.0f}</p>{format_cmp(google_backlinks, comp_google_backlinks)}</div>
+<div class="inner-box box-light"><p class="box-label text-muted"><i class="fa-solid fa-circle" style="color:#42D2E6; font-size:8px; margin-right:8px;"></i> Domains</p><p class="box-value-dark" style="margin: 0;">{google_domain:,.0f}</p>{format_cmp(google_domain, comp_google_domain)}</div>
 </div>
 </div>
 """, unsafe_allow_html=True)
 
         # ==========================================
-        # 6. 图表与明细
+        # 6. 图表与明细 
         # ==========================================
+        def hex_to_rgba(hex_color, alpha=0.1):
+            hex_color = hex_color.lstrip('#')
+            r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+            return f'rgba({r}, {g}, {b}, {alpha})'
+
         def get_trend_series(possible_names, cols, is_curr=False):
             if isinstance(possible_names, str): possible_names = [possible_names]
             data = pd.DataFrame()
@@ -935,22 +802,11 @@ try:
                     return pd.to_numeric(vals, errors='coerce').fillna(0).tolist()
             return []
 
-        sales_metrics_options = ['GA4 SEO销售额', 'Superset SEO销售额', 'GEO销售额（Superset）', 'GEO销售额（GA4）']
-        sales_colors = {
-            'GA4 SEO销售额': '#FF6475',
-            'Superset SEO销售额': '#FFB000',
-            'GEO销售额（Superset）': '#10B981',
-            'GEO销售额（GA4）': '#8B5CF6'
-        }
+        sales_metrics_options = ['GA4 SEO销售额', 'Superset SEO销售额', 'AI Assistant 销售额']
+        sales_colors = {'GA4 SEO销售额': '#FF6475', 'Superset SEO销售额': '#FFB000', 'AI Assistant 销售额': '#8B5CF6'}
 
-        traffic_metrics_options = ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量', 'GEO流量（GA4）']
-        traffic_colors = {
-            'SEO流量': '#2D235C',
-            'SEO Blog 流量': '#42D2E6',
-            'SEO 站内流量': '#FF6475',
-            '网站总流量': '#FFB000',
-            'GEO流量（GA4）': '#8B5CF6'
-        }
+        traffic_metrics_options = ['SEO流量', 'SEO Blog 流量', 'SEO 站内流量', '网站总流量', 'AI Assistant 流量']
+        traffic_colors = {'SEO流量': '#2D235C', 'SEO Blog 流量': '#42D2E6', 'SEO 站内流量': '#FF6475', '网站总流量': '#FFB000', 'AI Assistant 流量': '#8B5CF6'}
         
         font_style = dict(family="Poppins, sans-serif", color="#8E8CA7")
         dates1 = [date_mapping[d].strftime('%Y-%m-%d') for d in filtered_cols_1]
@@ -973,32 +829,25 @@ try:
         if selected_sales_metrics:
             for metric in selected_sales_metrics:
                 color = sales_colors[metric]
-                if metric == 'GEO销售额（Superset）':
-                    s_raw1 = df_geo_1['GEO_Sales'].tolist() if not df_geo_1.empty else []
-                    d_agg1, s_trend1 = aggregate_trend(dates_geo1, s_raw1, freq, 'sum')
-                    s_raw2 = df_geo_2['GEO_Sales'].tolist() if (enable_compare and not df_geo_2.empty) else []
-                    _, s_trend2 = aggregate_trend(dates_geo2, s_raw2, freq, 'sum') if s_raw2 else ([], [])
-                else:
-                    if metric == 'GA4 SEO销售额': search_names = ['ga4seo销售额']
-                    elif metric == 'GEO销售额（GA4）': search_names = ['aiassistant销售额']
-                    else: search_names = ['supersetseo销售额']
-                    
-                    s_raw1 = get_trend_series(search_names, filtered_cols_1, True)
-                    d_agg1, s_trend1 = aggregate_trend(dates1, s_raw1, freq, 'sum')
-                    s_raw2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
-                    _, s_trend2 = aggregate_trend(dates2, s_raw2, freq, 'sum') if s_raw2 else ([], [])
+                if metric == 'GA4 SEO销售额': search_names = ['ga4seo销售额']
+                elif metric == 'AI Assistant 销售额': search_names = ['aiassistant销售额']
+                else: search_names = ['supersetseo销售额']
+                
+                s_raw1 = get_trend_series(search_names, filtered_cols_1, True)
+                d_agg1, s_trend1 = aggregate_trend(dates1, s_raw1, freq, 'sum')
                 
                 if not enable_compare:
-                    if s_trend1:
-                        fig_sales.add_trace(go.Scatter(x=d_agg1, y=s_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
+                    fig_sales.add_trace(go.Scatter(x=d_agg1, y=s_trend1, mode='lines+markers', name=metric, line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white')), fill='tozeroy', fillcolor=hex_to_rgba(color, 0.1)))
                 else:
+                    s_raw2 = get_trend_series(search_names, filtered_cols_2, True) if filtered_cols_2 else []
+                    _, s_trend2 = aggregate_trend(dates2, s_raw2, freq, 'sum') if s_raw2 else ([], [])
+                    
                     max_len = max(len(s_trend1), len(s_trend2))
                     prefix = "Day" if freq == 'D' else ("Week" if freq == 'W' else "Month")
                     x_axis = [f"{prefix} {j+1}" for j in range(max_len)]
-                    if s_trend1:
-                        fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
-                    if s_trend2:
-                        fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
+                    
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend1)], y=s_trend1, mode='lines+markers', name=f'{metric} (Pri)', line=dict(color=color, width=3, shape='spline'), marker=dict(size=12, color=color, line=dict(width=2.5, color='white'))))
+                    fig_sales.add_trace(go.Scatter(x=x_axis[:len(s_trend2)], y=s_trend2, mode='lines+markers', name=f'{metric} (Cmp)', line=dict(color=color, width=3, dash='dash', shape='spline'), marker=dict(size=10)))
             
         fig_sales.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=10, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6', tickprefix="$"), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
         st.plotly_chart(fig_sales, use_container_width=True)
@@ -1024,7 +873,7 @@ try:
                 if metric == 'SEO Blog 流量': search_names = ['seoblog流量']
                 elif metric == 'SEO 站内流量': search_names = ['seo站内流量']
                 elif metric == '网站总流量': search_names = ['网站总流量']
-                elif metric == 'GEO流量（GA4）': search_names = ['aiassistant流量']
+                elif metric == 'AI Assistant 流量': search_names = ['aiassistant流量']
                 elif metric == 'SEO流量': search_names = ['seo流量']
 
                 t_raw1 = get_trend_series(search_names, filtered_cols_1)
@@ -1227,6 +1076,8 @@ try:
                 
                 fig_ai.update_layout(font=font_style, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0), height=350, xaxis=dict(showgrid=True, gridcolor='#F0F1F6'), yaxis=dict(showgrid=True, gridcolor='#F0F1F6'), legend=dict(orientation="h", y=1.12, x=0, xanchor="left", itemwidth=50))
                 st.plotly_chart(fig_ai, use_container_width=True)
+            elif df_ai_1.empty:
+                st.info("所选时间段暂无 AI Performance 数据。")
 
         # ==========================================
         # 10. Raw Tables
@@ -1242,23 +1093,10 @@ try:
 </div>
 """, unsafe_allow_html=True)
         df_display = df_de[['Metric'] + filtered_cols_1].copy()
-        df_display.columns = ['Metric'] + dates1
+        df_display.columns = ['Metric'] + [str(d) for d in pd.date_range(start_d1, end_d1)]
         df_display = df_display.set_index('Metric')
         st.dataframe(df_display, use_container_width=True, height=350)
         
-        if not df_geo_1.empty:
-            st.markdown("""
-<div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
-    <div class="flex-center">
-        <div class="icon-small bg-gray flex-center" style="justify-content:center; margin-bottom: 0;">
-            <i class="fa-solid fa-robot"></i>
-        </div>
-        <span class="text-main" style="font-weight:700; font-size:16px;">Raw Data Matrix (GEO Sales - Superset)</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-            st.dataframe(df_geo_1, use_container_width=True, height=350)
-
         if date_col_gsc and not df_gsc_1.empty:
             st.markdown("""
 <div class="soft-card" style="padding: 16px 24px; margin-top: 30px; margin-bottom: 16px; border-radius: 16px;">
