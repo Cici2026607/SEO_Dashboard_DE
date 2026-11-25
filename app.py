@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 from datetime import datetime, date, timedelta
 import calendar
 import plotly.graph_objects as go
@@ -95,21 +96,107 @@ st.markdown("""
 # ==========================================
 # 1. Data Loader & Smart Matching
 # ==========================================
+def parse_date_safe(val):
+    if pd.isna(val):
+        return None
+    s = str(val).strip()
+    if not s or s.lower() == 'nan' or s.isdigit():
+        return None
+    s_norm = re.sub(r'[年月]', '/', s).replace('日', '').replace('.', '/').strip()
+    try:
+        dt = pd.to_datetime(s_norm, errors='raise')
+        if 2020 <= dt.year <= 2035:
+            return dt.date()
+    except Exception:
+        return None
+    return None
+
+def count_dates_in_row(row_vals):
+    non_empty = [v for v in row_vals[1:] if pd.notna(v) and str(v).strip() != '']
+    if not non_empty:
+        return 0
+    step = max(1, len(non_empty) // 60)
+    cnt = 0
+    for v in non_empty[::step]:
+        if parse_date_safe(v) is not None:
+            cnt += 1
+            if cnt >= 5:
+                return cnt
+    return cnt
+
 @st.cache_data(ttl=300)
 def load_and_clean_data():
     csv_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT4KTuYQtC6xsRIwgWLDK9aJUhqmKDmUg4XmMxbsKadyj4QSRM9GNvDjyYz7z8vzKj8nohA7a8ukiLz/pub?gid=0&single=true&output=csv"
     bust_url = f"{csv_url}&_t={int(datetime.now().timestamp())}"
     
     df_raw = pd.read_csv(bust_url, header=None)
-    raw_columns = list(df_raw.iloc[21])
-    df_de = df_raw.iloc[23:40].copy()
+
+    col0_raw = df_raw.iloc[:, 0].astype(str).str.strip()
+    col0_norm = col0_raw.apply(lambda s: re.sub(r'[\s\u3000\-_.·/（）()【】\[\]]+', '', s).lower())
+
+    # 扫描全表找到所有日期表头行
+    date_rows = [r for r in range(len(df_raw)) if count_dates_in_row(df_raw.iloc[r]) >= 5]
+
+    # 策略 1：按站点名宽松匹配 Callie DE
+    de_matches = col0_norm[
+        col0_norm.str.contains('calliede', na=False)
+        | col0_norm.str.contains('德语', na=False)
+        | col0_norm.str.contains('德国', na=False)
+        | col0_norm.isin(['de', 'de站'])
+    ].index.tolist()
+
+    end_idx = len(df_raw)
+    if de_matches:
+        start_idx = de_matches[0]
+        if start_idx in date_rows:
+            header_idx = start_idx
+            data_start = start_idx + 1
+        elif (start_idx + 1) in date_rows:
+            header_idx = start_idx + 1
+            data_start = start_idx + 2
+        elif (start_idx - 1) in date_rows:
+            header_idx = start_idx - 1
+            data_start = start_idx + 1
+        else:
+            above = [r for r in date_rows if r < start_idx]
+            header_idx = above[-1] if above else (date_rows[0] if date_rows else 0)
+            data_start = start_idx + 1
+
+        for r in range(data_start, len(df_raw)):
+            v = col0_norm.iloc[r]
+            is_other_site = (v.startswith('callie') and 'calliede' not in v) or v in ['fr', 'es', 'it', 'uk', 'us', 'se', 'fi', 'nl', 'jp']
+            if is_other_site or (r in date_rows and r > data_start):
+                end_idx = r
+                break
+    elif len(date_rows) >= 2:
+        # 策略 2：第 2 个日期表头区块（FR=0, DE=1, ES=2）
+        header_idx = date_rows[1]
+        data_start = header_idx + 1
+        end_idx = date_rows[2] if len(date_rows) >= 3 else len(df_raw)
+    else:
+        # 策略 3：按第 2 个 'ga4seo销售额' / 'seo流量' 定位 DE 区块，并用全表日期行作表头
+        metric_hits = col0_norm[col0_norm.str.contains('ga4seo销售额', na=False)].index.tolist()
+        if len(metric_hits) < 2:
+            metric_hits = col0_norm[col0_norm == 'seo流量'].index.tolist()
+        if len(metric_hits) >= 2:
+            hit = metric_hits[1]
+            header_idx = date_rows[0] if date_rows else 0
+            data_start = max(header_idx + 1, hit - 2)
+            end_idx = metric_hits[2] - 2 if len(metric_hits) >= 3 else min(len(df_raw), hit + 22)
+        else:
+            header_idx = date_rows[0] if date_rows else (21 if len(df_raw) > 21 else 0)
+            data_start = 23 if len(df_raw) > 23 else 1
+            end_idx = 40 if len(df_raw) >= 40 else len(df_raw)
+
+    raw_columns = list(df_raw.iloc[header_idx])
+    df_de = df_raw.iloc[data_start:end_idx].copy()
     
     clean_columns = []
     for i, col in enumerate(raw_columns):
         if i == 0: clean_columns.append("Metric")
         else:
-            col_str = str(col)
-            if pd.isna(col) or col_str.lower() == 'nan': clean_columns.append(f"空列_{i}")
+            col_str = str(col).strip()
+            if pd.isna(col) or col_str == '' or col_str.lower() == 'nan': clean_columns.append(f"空列_{i}")
             elif col_str in clean_columns: clean_columns.append(f"{col_str}_重复_{i}")
             else: clean_columns.append(col_str)
                 
@@ -119,7 +206,17 @@ def load_and_clean_data():
     df_de['Metric_Norm'] = df_de['Metric'].str.replace(' ', '', regex=False).str.lower()
     df_de = df_de[df_de['Metric'].notna() & (df_de['Metric'] != '') & (df_de['Metric'].str.lower() != 'nan')]
     cols_to_keep = [c for c in df_de.columns if "空列_" not in c]
-    return df_de[cols_to_keep]
+
+    debug_info = {
+        "shape": df_raw.shape,
+        "date_rows": date_rows,
+        "header_idx": header_idx,
+        "data_start": data_start,
+        "end_idx": end_idx,
+        "col0_preview": [f"Row {i+1}: {col0_raw.iloc[i]}" for i in range(min(50, len(df_raw))) if col0_raw.iloc[i] and col0_raw.iloc[i].lower() != 'nan'],
+        "header_preview": [str(x) for x in raw_columns[:10]]
+    }
+    return df_de[cols_to_keep], debug_info
 
 @st.cache_data(ttl=300)
 def load_gsc_data():
@@ -201,7 +298,7 @@ def load_geo_sales_data():
 
 try:
     with st.spinner('🚀 同步 Callie DE 德语站最新数据...'):
-        df_de = load_and_clean_data()
+        df_de, de_debug = load_and_clean_data()
         try: df_gsc, date_col_gsc = load_gsc_data()
         except Exception: df_gsc, date_col_gsc = pd.DataFrame(), None
         try: df_ai, date_col_ai = load_ai_perf_data()
@@ -246,8 +343,14 @@ try:
         date_mapping = {}
         for col in df_de.columns:
             if col not in ['Metric', 'Metric_Norm']:
-                try: date_mapping[col] = pd.to_datetime(col).date()
-                except: pass
+                dt = parse_date_safe(col)
+                if dt is not None:
+                    date_mapping[col] = dt
+
+        if not date_mapping:
+            st.warning("⚠️ 未能从 DE 主表解析出任何日期列，请展开下方诊断信息并截图。")
+            with st.expander("🔍 数据源结构诊断", expanded=True):
+                st.write(de_debug)
         
         mtd_start = date(current_year, current_month, 1)
         mtd_cols = [col for col, dt in date_mapping.items() if dt.year == current_year and dt.month == current_month and dt <= data_date]
@@ -360,7 +463,7 @@ try:
 </div>
 """, unsafe_allow_html=True)
 
-        # --- 新增: GEO 销售额和流量完成情况 ---
+        # --- GEO 销售额和流量完成情况 ---
         col_g1, col_g2 = st.columns(2)
         with col_g1:
             st.markdown(f"""
@@ -456,7 +559,7 @@ try:
 </div>
 """, unsafe_allow_html=True)
 
-        # --- 新增: MTD Monitoring GEO 销售额 (superset / GA4) 和 GEO 流量 (GA4) ---
+        # --- MTD Monitoring: GEO 销售额 (superset / GA4) 和 GEO 流量 (GA4) ---
         mom_geo_sup_pct = ((mtd_geo_sales_superset - lm_geo_sales_superset) / lm_geo_sales_superset) * 100 if lm_geo_sales_superset > 0 else 0.0
         yoy_geo_sup_pct = ((mtd_geo_sales_superset - ly_geo_sales_superset) / ly_geo_sales_superset) * 100 if ly_geo_sales_superset > 0 else 0.0
         c4_m, bg4_m, arr4_m = get_trend_ui(mom_geo_sup_pct)
@@ -515,7 +618,6 @@ try:
             if target_year == current_year:
                 last_valid_month = current_month - 1 if current_month > 1 else 1
 
-            # 核心安全清洗：剔除 nan，解决 AI Assistant 提取时的 float 报错
             def safe_clean(x):
                 if pd.isna(x) or str(x).strip() == '' or str(x).strip().lower() == 'nan': return 0.0
                 v = pd.to_numeric(str(x).replace(',', '').replace('$', '').replace('%', ''), errors='coerce')
@@ -548,13 +650,9 @@ try:
                         break
                 if data_match.empty: return []
                 
-                for c in data_match.columns:
-                    if c not in ['Metric', 'Metric_Norm']:
-                        try:
-                            dt = pd.to_datetime(c)
-                            if dt.year == target_year:
-                                res_dict[str(dt.month)] += safe_clean(data_match[c].iloc[0])
-                        except: pass
+                for c, dt in date_mapping.items():
+                    if dt.year == target_year and c in data_match.columns:
+                        res_dict[str(dt.month)] += safe_clean(data_match[c].iloc[0])
                         
             final_vals = [res_dict[str(m)] for m in range(1, 13)]
             if all(v == 0 or pd.isna(v) for v in final_vals): return []
